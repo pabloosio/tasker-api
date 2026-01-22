@@ -1,0 +1,36 @@
+{
+  "name": "tasker-api",
+  "version": "1.0.0",
+  "main": "src/server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "migrate":  "npx sequelize-cli db:migrate",
+    "migrate: undo": "npx sequelize-cli db:migrate:undo",
+    "migrate: undo:all": "npx sequelize-cli db:migrate:undo:all",
+    "seed": "npx sequelize-cli db:seed:all",
+    "seed:undo": "npx sequelize-cli db:seed:undo: all"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "API REST para gestor de tareas con Express, Node.js, Sequelize y MySQL",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.2.1",
+    "helmet": "^8.1.0",
+    "joi": "^18.0.2",
+    "jsonwebtoken": "^9.0.3",
+    "morgan": "^1.10.1",
+    "mysql2": "^3.16.1",
+    "sequelize": "^6.37.7",
+    "sequelize-cli": "^6.6.5",
+    "winston": "^3.19.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.11"
+  }
+}
