@@ -51,6 +51,8 @@ temp/
 claude.json
 .anthropic
 *.claude
+CLAUDE.md
+API_DOCS.md
 
 # Documentation
 docs/internal/
