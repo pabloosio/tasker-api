@@ -1,16 +1,16 @@
 module.exports = {
   // Estados de tareas
-  TASK_STATUS:  {
-    PENDING: 'pending',
-    IN_PROGRESS: 'in_progress',
-    COMPLETED: 'completed'
+  TASK_STATUS: {
+    PENDING: 'PENDING',
+    IN_PROGRESS: 'IN_PROGRESS',
+    COMPLETED: 'COMPLETED'
   },
 
   // Prioridades de tareas
   TASK_PRIORITY: {
-    LOW: 'low',
-    MEDIUM:  'medium',
-    HIGH:  'high'
+    LOW: 'LOW',
+    MEDIUM: 'MEDIUM',
+    HIGH: 'HIGH'
   },
 
   // Roles de usuario

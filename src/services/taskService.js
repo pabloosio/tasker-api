@@ -1,6 +1,6 @@
 const { Task, Category, User } = require('../models');
 const { NotFoundError, ForbiddenError } = require('../utils/errors');
-const { PAGINATION, TASK_STATUS } = require('../config/constants');
+const { PAGINATION, TASK_STATUS, TASK_PRIORITY } = require('../config/constants');
 const { Op } = require('sequelize');
 
 /**
@@ -72,7 +72,6 @@ exports.getTaskStats = async (userId) => {
     where: { userId },
     attributes: ['status', 'priority']
   });
-
   const stats = {
     total: tasks.length,
     byStatus: {
@@ -81,9 +80,9 @@ exports.getTaskStats = async (userId) => {
       completed: tasks.filter(t => t.status === TASK_STATUS.COMPLETED).length
     },
     byPriority: {
-      low: tasks.filter(t => t.priority === 'low').length,
-      medium: tasks.filter(t => t.priority === 'medium').length,
-      high: tasks.filter(t => t.priority === 'high').length
+      low: tasks.filter(t => t.priority === TASK_PRIORITY.LOW).length,
+      medium: tasks.filter(t => t.priority === TASK_PRIORITY.MEDIUM).length,
+      high: tasks.filter(t => t.priority === TASK_PRIORITY.HIGH).length
     }
   };
 
