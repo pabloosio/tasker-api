@@ -5,7 +5,7 @@ const { successResponse } = require('../utils/response');
  * Obtener todas las tareas del usuario
  * GET /api/v1/tasks
  */
-exports. getAllTasks = async (req, res, next) => {
+exports.getAllTasks = async (req, res, next) => {
   try {
     const result = await taskService.getAllTasks(req.user.id, req.query);
     return successResponse(res, result, 'Tareas obtenidas exitosamente');

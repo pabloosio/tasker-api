@@ -15,9 +15,10 @@ const sequelize = new Sequelize(
 const db = {
   sequelize,
   Sequelize,
-  User: require('./User')(sequelize, Sequelize. DataTypes),
+  User: require('./User')(sequelize, Sequelize.DataTypes),
   Task: require('./Task')(sequelize, Sequelize.DataTypes),
-  Category: require('./Category')(sequelize, Sequelize.DataTypes)
+  Category: require('./Category')(sequelize, Sequelize.DataTypes),
+  AuthLog: require('./AuthLog')(sequelize, Sequelize.DataTypes)
 };
 
 // Configurar asociaciones
