@@ -150,14 +150,19 @@ exports.updateTask = async (userId, taskId, taskData) => {
     throw new ForbiddenError('No tienes permiso para modificar esta tarea');
   }
 
-  // Si se marca como completada, agregar fecha
-  if (taskData.status === TASK_STATUS.COMPLETED && !task.completedAt) {
-    taskData.completedAt = new Date();
-  }
+  // Si cambió el status, actualizar statusUpdatedAt
+  if (taskData.status && taskData.status !== task.status) {
+    taskData.statusUpdatedAt = new Date();
 
-  // Si se desmarca como completada, remover fecha
-  if (taskData.status !== TASK_STATUS.COMPLETED && task.completedAt) {
-    taskData.completedAt = null;
+    // Si se marca como completada, agregar fecha
+    if (taskData.status === TASK_STATUS.COMPLETED) {
+      taskData.completedAt = new Date();
+    }
+
+    // Si se desmarca como completada, remover fecha
+    if (taskData.status !== TASK_STATUS.COMPLETED && task.completedAt) {
+      taskData.completedAt = null;
+    }
   }
 
   await task.update(taskData);

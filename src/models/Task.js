@@ -51,6 +51,10 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.DATE,
       allowNull: true
     },
+    statusUpdatedAt: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
     userId: {
       type: DataTypes.UUID,
       allowNull: false,

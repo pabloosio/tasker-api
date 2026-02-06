@@ -5,6 +5,7 @@ const authRoutes = require('./authRoutes');
 const userRoutes = require('./userRoutes');
 const taskRoutes = require('./taskRoutes');
 const categoryRoutes = require('./categoryRoutes');
+const exportRoutes = require('./exportRoutes');
 
 // Info de la API
 router.get('/', (req, res) => {
@@ -16,7 +17,8 @@ router.get('/', (req, res) => {
       auth: '/api/v1/auth',
       users: '/api/v1/users',
       tasks: '/api/v1/tasks',
-      categories: '/api/v1/categories'
+      categories: '/api/v1/categories',
+      export: '/api/v1/export'
     }
   });
 });
@@ -28,5 +30,6 @@ router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
 router.use('/tasks', taskRoutes);
 router.use('/categories', categoryRoutes);
+router.use('/export', exportRoutes);
 
 module.exports = router;
