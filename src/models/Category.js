@@ -35,8 +35,16 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.UUID,
       allowNull: false,
       references: {
-        model:  'users',
-        key:  'id'
+        model: 'users',
+        key: 'id'
+      }
+    },
+    workspaceId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: {
+        model: 'workspaces',
+        key: 'id'
       }
     }
   }, {
@@ -45,10 +53,11 @@ module.exports = (sequelize, DataTypes) => {
     underscored: true,
     indexes: [
       { fields: ['userId'] },
+      { fields: ['workspaceId'] },
       {
         unique: true,
-        fields: ['userId', 'name'],
-        name: 'unique_category_per_user'
+        fields: ['userId', 'workspaceId', 'name'],
+        name: 'unique_category_per_workspace'
       }
     ]
   });
@@ -58,6 +67,11 @@ module.exports = (sequelize, DataTypes) => {
     Category.belongsTo(models.User, {
       foreignKey: 'userId',
       as: 'user'
+    });
+
+    Category.belongsTo(models.Workspace, {
+      foreignKey: 'workspaceId',
+      as: 'workspace'
     });
 
     Category.hasMany(models.Task, {

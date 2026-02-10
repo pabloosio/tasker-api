@@ -20,8 +20,7 @@ exports.getAllTasks = async (req, res, next) => {
  */
 exports.getTaskStats = async (req, res, next) => {
   try {
-    const stats = await taskService.getTaskStats(req.user.id);
-    console.log("stats",stats)
+    const stats = await taskService.getTaskStats(req.user.id, req.query);
     return successResponse(res, stats, 'Estadísticas obtenidas exitosamente');
   } catch (error) {
     next(error);

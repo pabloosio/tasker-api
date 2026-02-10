@@ -48,7 +48,15 @@ const taskSchema = Joi.object({
     .allow(null)
     .messages({
       'string.guid': 'El ID de categoría debe ser un UUID válido'
-    })
+    }),
+
+  workspaceId: Joi.string()
+    .uuid()
+    .allow(null),
+
+  assignedTo: Joi.string()
+    .uuid()
+    .allow(null)
 });
 
 // Schema para actualizar tarea
@@ -75,7 +83,15 @@ const taskUpdateSchema = Joi.object({
     .iso()
     .allow(null),
   
-  categoryId:  Joi.string()
+  categoryId: Joi.string()
+    .uuid()
+    .allow(null),
+
+  workspaceId: Joi.string()
+    .uuid()
+    .allow(null),
+
+  assignedTo: Joi.string()
     .uuid()
     .allow(null)
 }).min(1).messages({

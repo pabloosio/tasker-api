@@ -7,7 +7,7 @@ const { successResponse } = require('../utils/response');
  */
 exports.getAllCategories = async (req, res, next) => {
   try {
-    const categories = await categoryService.getAllCategories(req.user.id);
+    const categories = await categoryService.getAllCategories(req.user.id, req.query);
     return successResponse(res, categories, 'Categorías obtenidas exitosamente');
   } catch (error) {
     next(error);

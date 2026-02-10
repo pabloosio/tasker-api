@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const exportController = require('../controllers/exportController');
-const { authenticate } = require('../middlewares/auth');
+const authenticate = require('../middlewares/auth');
 
 // Todas las rutas requieren autenticación
 router.use(authenticate);

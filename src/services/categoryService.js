@@ -1,12 +1,27 @@
-const { Category, Task } = require('../models');
+const { Category, Task, WorkspaceMember } = require('../models');
 const { NotFoundError, ForbiddenError, BadRequestError } = require('../utils/errors');
 
 /**
- * Obtener todas las categorías del usuario
+ * Obtener todas las categorías del usuario (o del workspace)
  */
-exports.getAllCategories = async (userId) => {
+exports.getAllCategories = async (userId, filters = {}) => {
+  const { workspaceId } = filters;
+  const where = {};
+
+  if (workspaceId) {
+    const membership = await WorkspaceMember.findOne({
+      where: { workspaceId, userId }
+    });
+    if (!membership) {
+      throw new ForbiddenError('No tienes acceso a este workspace');
+    }
+    where.workspaceId = workspaceId;
+  } else {
+    where.userId = userId;
+  }
+
   const categories = await Category.findAll({
-    where: { userId },
+    where,
     include: [
       {
         model: Task,
@@ -59,13 +74,13 @@ exports.getCategoryById = async (userId, categoryId) => {
  * Crear nueva categoría
  */
 exports.createCategory = async (userId, categoryData) => {
+  const whereCheck = { userId, name: categoryData.name };
+  if (categoryData.workspaceId) {
+    whereCheck.workspaceId = categoryData.workspaceId;
+  }
+
   // Verificar si ya existe una categoría con ese nombre
-  const existing = await Category.findOne({
-    where: {
-      userId,
-      name: categoryData. name
-    }
-  });
+  const existing = await Category.findOne({ where: whereCheck });
 
   if (existing) {
     throw new BadRequestError('Ya tienes una categoría con ese nombre');

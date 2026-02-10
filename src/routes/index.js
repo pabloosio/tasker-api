@@ -6,6 +6,7 @@ const userRoutes = require('./userRoutes');
 const taskRoutes = require('./taskRoutes');
 const categoryRoutes = require('./categoryRoutes');
 const exportRoutes = require('./exportRoutes');
+const workspaceRoutes = require('./workspaceRoutes');
 
 // Info de la API
 router.get('/', (req, res) => {
@@ -18,7 +19,8 @@ router.get('/', (req, res) => {
       users: '/api/v1/users',
       tasks: '/api/v1/tasks',
       categories: '/api/v1/categories',
-      export: '/api/v1/export'
+      export: '/api/v1/export',
+      workspaces: '/api/v1/workspaces'
     }
   });
 });
@@ -31,5 +33,6 @@ router.use('/users', userRoutes);
 router.use('/tasks', taskRoutes);
 router.use('/categories', categoryRoutes);
 router.use('/export', exportRoutes);
+router.use('/workspaces', workspaceRoutes);
 
 module.exports = router;

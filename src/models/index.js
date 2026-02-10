@@ -18,7 +18,9 @@ const db = {
   User: require('./User')(sequelize, Sequelize.DataTypes),
   Task: require('./Task')(sequelize, Sequelize.DataTypes),
   Category: require('./Category')(sequelize, Sequelize.DataTypes),
-  AuthLog: require('./AuthLog')(sequelize, Sequelize.DataTypes)
+  AuthLog: require('./AuthLog')(sequelize, Sequelize.DataTypes),
+  Workspace: require('./Workspace')(sequelize, Sequelize.DataTypes),
+  WorkspaceMember: require('./WorkspaceMember')(sequelize, Sequelize.DataTypes)
 };
 
 // Configurar asociaciones

@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
-const { User, AuthLog } = require('../models');
+const { User, AuthLog, Workspace, WorkspaceMember } = require('../models');
+const { WORKSPACE_ROLES } = require('../config/constants');
 const { UnauthorizedError, BadRequestError } = require('../utils/errors');
 const config = require('../config/env');
 const logger = require('../utils/logger');
@@ -41,6 +42,20 @@ exports.register = async (userData, reqInfo = {}) => {
   await logAuthEvent('REGISTER_SUCCESS', email, {
     userId: user.id,
     ...reqInfo
+  });
+
+  // Crear workspace personal
+  const personalWorkspace = await Workspace.create({
+    name: 'Personal',
+    description: 'Espacio de trabajo personal',
+    ownerId: user.id,
+    isPersonal: true
+  });
+
+  await WorkspaceMember.create({
+    workspaceId: personalWorkspace.id,
+    userId: user.id,
+    role: WORKSPACE_ROLES.OWNER
   });
 
   // Generar token

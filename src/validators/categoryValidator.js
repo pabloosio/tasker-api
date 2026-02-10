@@ -25,7 +25,11 @@ const categorySchema = Joi.object({
     .allow(null)
     .messages({
       'string.pattern.base': 'El color debe ser un código hexadecimal válido (ej: #3B82F6)'
-    })
+    }),
+
+  workspaceId: Joi.string()
+    .uuid()
+    .allow(null)
 });
 
 module.exports = {

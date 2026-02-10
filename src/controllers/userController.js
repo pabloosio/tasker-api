@@ -2,6 +2,19 @@ const userService = require('../services/userService');
 const { successResponse } = require('../utils/response');
 
 /**
+ * Obtener usuarios activos (excluyendo al autenticado)
+ * GET /api/v1/users/active
+ */
+exports.getActiveUsers = async (req, res, next) => {
+  try {
+    const users = await userService.getActiveUsers(req.user.id);
+    return successResponse(res, users, 'Usuarios obtenidos exitosamente');
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * Obtener perfil del usuario autenticado
  * GET /api/v1/users/profile
  */

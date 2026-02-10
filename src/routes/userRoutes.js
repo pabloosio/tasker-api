@@ -6,6 +6,9 @@ const auth = require('../middlewares/auth');
 // Todas las rutas requieren autenticación
 router.use(auth);
 
+// GET /api/v1/users/active - Obtener usuarios activos para invitaciones
+router.get('/active', userController.getActiveUsers);
+
 // GET /api/v1/users/profile - Obtener perfil del usuario autenticado
 router.get('/profile', userController.getProfile);
 

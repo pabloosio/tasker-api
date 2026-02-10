@@ -19,6 +19,13 @@ module.exports = {
     ADMIN: 'admin'
   },
 
+  // Roles de workspace
+  WORKSPACE_ROLES: {
+    OWNER: 'OWNER',
+    ADMIN: 'ADMIN',
+    MEMBER: 'MEMBER'
+  },
+
   // Paginación
   PAGINATION: {
     DEFAULT_PAGE: 1,

@@ -94,10 +94,22 @@ module.exports = (sequelize, DataTypes) => {
       as: 'tasks',
       onDelete: 'CASCADE'
     });
-    
+
     User.hasMany(models.Category, {
       foreignKey: 'userId',
       as: 'categories',
+      onDelete: 'CASCADE'
+    });
+
+    User.hasMany(models.Workspace, {
+      foreignKey: 'ownerId',
+      as: 'ownedWorkspaces',
+      onDelete: 'CASCADE'
+    });
+
+    User.hasMany(models.WorkspaceMember, {
+      foreignKey: 'userId',
+      as: 'workspaceMemberships',
       onDelete: 'CASCADE'
     });
   };

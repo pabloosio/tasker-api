@@ -70,6 +70,22 @@ module.exports = (sequelize, DataTypes) => {
         model: 'categories',
         key: 'id'
       }
+    },
+    workspaceId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: {
+        model: 'workspaces',
+        key: 'id'
+      }
+    },
+    assignedTo: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: {
+        model: 'users',
+        key: 'id'
+      }
     }
   }, {
     tableName: 'tasks',
@@ -79,8 +95,10 @@ module.exports = (sequelize, DataTypes) => {
       { fields: ['userId'] },
       { fields: ['status'] },
       { fields: ['priority'] },
-      { fields:  ['categoryId'] },
-      { fields:  ['dueDate'] }
+      { fields: ['categoryId'] },
+      { fields: ['dueDate'] },
+      { fields: ['workspaceId'] },
+      { fields: ['assignedTo'] }
     ]
   });
 
@@ -94,6 +112,16 @@ module.exports = (sequelize, DataTypes) => {
     Task.belongsTo(models.Category, {
       foreignKey: 'categoryId',
       as: 'category'
+    });
+
+    Task.belongsTo(models.Workspace, {
+      foreignKey: 'workspaceId',
+      as: 'workspace'
+    });
+
+    Task.belongsTo(models.User, {
+      foreignKey: 'assignedTo',
+      as: 'assignee'
     });
   };
 
