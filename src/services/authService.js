@@ -115,7 +115,7 @@ exports.login = async ({ email, password }, reqInfo = {}) => {
       userId: user.id,
       ...reqInfo
     });
-    throw new UnauthorizedError('Credenciales inválidas');
+    throw new UnauthorizedError('Email o contraseña incorrectos. Por favor verifica tus datos.');
   }
 
   // Actualizar último login
@@ -319,6 +319,7 @@ exports.verifyEmail = async (token) => {
   }
 
   user.emailVerified = true;
+  user.isActive = true;
   user.emailVerificationToken = null;
   await user.save();
 
