@@ -36,3 +36,59 @@ exports.login = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * Solicitar reinicio de contraseña
+ * POST /api/v1/auth/forgot-password
+ */
+exports.forgotPassword = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    const result = await authService.requestPasswordReset(email);
+    return successResponse(res, result, result.message);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Validar token de reinicio
+ * GET /api/v1/auth/validate-reset-token/:token
+ */
+exports.validateResetToken = async (req, res, next) => {
+  try {
+    const { token } = req.params;
+    await authService.validatePasswordResetToken(token);
+    return successResponse(res, {}, 'Token válido');
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Reiniciar contraseña
+ * POST /api/v1/auth/reset-password
+ */
+exports.resetPassword = async (req, res, next) => {
+  try {
+    const { token, newPassword } = req.body;
+    const result = await authService.resetPassword(token, newPassword);
+    return successResponse(res, result, result.message);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Verificar email
+ * POST /api/v1/auth/verify-email/:token
+ */
+exports.verifyEmail = async (req, res, next) => {
+  try {
+    const { token } = req.params;
+    const result = await authService.verifyEmail(token);
+    return successResponse(res, result, result.message);
+  } catch (error) {
+    next(error);
+  }
+};

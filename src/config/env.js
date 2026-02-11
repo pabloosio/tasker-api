@@ -30,5 +30,17 @@ module.exports = {
   corsOrigin: process.env.CORS_ORIGIN || '*',
 
   // Logging
-  logLevel: process.env.LOG_LEVEL || 'info'
+  logLevel: process.env.LOG_LEVEL || 'info',
+
+  // AWS SES
+  aws: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    sesRegion: process.env.AWS_SES_REGION || 'us-east-1',
+    sesFromEmail: process.env.SES_FROM_EMAIL || 'noreply@tasker.com'
+  },
+
+  // Email Tokens
+  emailTokenExpiry: parseInt(process.env.EMAIL_TOKEN_EXPIRY) || 24, // horas
+  passwordResetTokenExpiry: parseInt(process.env.PASSWORD_RESET_TOKEN_EXPIRY) || 1 // horas
 };

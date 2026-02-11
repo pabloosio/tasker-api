@@ -1,9 +1,11 @@
 const jwt = require('jsonwebtoken');
-const { User, AuthLog, Workspace, WorkspaceMember } = require('../models');
+const crypto = require('crypto');
+const { User, AuthLog, Workspace, WorkspaceMember, PasswordResetToken, EmailVerificationToken } = require('../models');
 const { WORKSPACE_ROLES } = require('../config/constants');
-const { UnauthorizedError, BadRequestError } = require('../utils/errors');
+const { UnauthorizedError, BadRequestError, NotFoundError } = require('../utils/errors');
 const config = require('../config/env');
 const logger = require('../utils/logger');
+const emailService = require('./emailService');
 
 /**
  * Registrar un evento de autenticación
@@ -32,11 +34,12 @@ exports.register = async (userData, reqInfo = {}) => {
     throw new BadRequestError('Este email ya está registrado');
   }
 
-  // Crear usuario
+  // Crear usuario INACTIVO hasta que verifique el email
   const user = await User.create({
     email,
     password,
-    name
+    name,
+    isActive: false
   });
 
   await logAuthEvent('REGISTER_SUCCESS', email, {
@@ -58,8 +61,8 @@ exports.register = async (userData, reqInfo = {}) => {
     role: WORKSPACE_ROLES.OWNER
   });
 
-  // Generar token
-  const token = generateToken(user);
+  // Enviar email de verificación
+  await exports.requestEmailVerification(user.id);
 
   return {
     user: {
@@ -67,9 +70,12 @@ exports.register = async (userData, reqInfo = {}) => {
       name: user.name,
       email: user.email,
       role: user.role,
+      emailVerified: user.emailVerified,
+      isActive: false,
       createdAt: user.createdAt
     },
-    token
+    message: 'Te hemos enviado un email de verificación. Por favor verifica tu email antes de iniciar sesión. Recuerda revisar la carpeta de spam.',
+    requiresEmailVerification: true
   };
 };
 
@@ -82,6 +88,15 @@ exports.login = async ({ email, password }, reqInfo = {}) => {
   if (!user) {
     await logAuthEvent('LOGIN_FAILED_EMAIL_NOT_FOUND', email, reqInfo);
     throw new UnauthorizedError('Credenciales inválidas');
+  }
+
+  // Verificar si el email está verificado
+  if (!user.emailVerified) {
+    await logAuthEvent('LOGIN_FAILED_EMAIL_NOT_VERIFIED', email, {
+      userId: user.id,
+      ...reqInfo
+    });
+    throw new UnauthorizedError('Por favor verifica tu email antes de iniciar sesión. Revisa tu bandeja de entrada y la carpeta de spam.');
   }
 
   // Verificar si el usuario está activo
@@ -141,4 +156,175 @@ const generateToken = (user) => {
       expiresIn: config.jwt.expiresIn
     }
   );
+};
+
+/**
+ * Generar un token único seguro
+ */
+const generateSecureToken = () => {
+  return crypto.randomBytes(32).toString('hex');
+};
+
+/**
+ * Solicitar reinicio de contraseña
+ */
+exports.requestPasswordReset = async (email) => {
+  const user = await User.findOne({ where: { email } });
+
+  if (!user) {
+    throw new NotFoundError('No existe una cuenta con este email');
+  }
+
+  // Invalidar tokens anteriores
+  await PasswordResetToken.update(
+    { used: true },
+    { where: { userId: user.id, used: false } }
+  );
+
+  // Generar nuevo token
+  const token = generateSecureToken();
+  const expiresAt = new Date(Date.now() + config.passwordResetTokenExpiry * 60 * 60 * 1000);
+
+  await PasswordResetToken.create({
+    userId: user.id,
+    token,
+    expiresAt
+  });
+
+  // Enviar email
+  await emailService.sendPasswordResetEmail(user.email, token, user.name);
+
+  logger.info(`Solicitud de reinicio de contraseña para ${email}`);
+  return { message: 'Se ha enviado un email con las instrucciones para reiniciar tu contraseña' };
+};
+
+/**
+ * Validar token de reinicio de contraseña
+ */
+exports.validatePasswordResetToken = async (token) => {
+  const resetToken = await PasswordResetToken.findOne({
+    where: { token },
+    include: {
+      model: User,
+      as: 'user',
+      attributes: ['id', 'email', 'name']
+    }
+  });
+
+  if (!resetToken) {
+    throw new BadRequestError('El token de reinicio no es válido');
+  }
+
+  if (resetToken.used) {
+    throw new BadRequestError('Este token ya ha sido utilizado');
+  }
+
+  if (new Date() > resetToken.expiresAt) {
+    throw new BadRequestError('El token de reinicio ha expirado');
+  }
+
+  return resetToken;
+};
+
+/**
+ * Reiniciar contraseña
+ */
+exports.resetPassword = async (token, newPassword) => {
+  const resetToken = await exports.validatePasswordResetToken(token);
+
+  // Actualizar contraseña y marcar token como usado
+  resetToken.user.password = newPassword;
+  await resetToken.user.save();
+
+  resetToken.used = true;
+  await resetToken.save();
+
+  logger.info(`Contraseña reiniciada para ${resetToken.user.email}`);
+  return { message: 'Tu contraseña ha sido reiniciada exitosamente' };
+};
+
+/**
+ * Solicitar verificación de email
+ */
+exports.requestEmailVerification = async (userId, newEmail = null) => {
+  const user = await User.findByPk(userId);
+
+  if (!user) {
+    throw new NotFoundError('Usuario no encontrado');
+  }
+
+  const emailToVerify = newEmail || user.email;
+
+  // Invalidar tokens anteriores para este usuario
+  await EmailVerificationToken.update(
+    { verified: true },
+    { where: { userId, verified: false } }
+  );
+
+  // Generar nuevo token
+  const token = generateSecureToken();
+  const expiresAt = new Date(Date.now() + config.emailTokenExpiry * 60 * 60 * 1000);
+
+  await EmailVerificationToken.create({
+    userId,
+    email: emailToVerify,
+    token,
+    expiresAt
+  });
+
+  // Enviar email
+  await emailService.sendVerificationEmail(emailToVerify, token, user.name);
+
+  logger.info(`Email de verificación enviado a ${emailToVerify}`);
+  return { message: 'Se ha enviado un email con el enlace de verificación' };
+};
+
+/**
+ * Validar token de verificación de email
+ */
+exports.validateEmailVerificationToken = async (token) => {
+  const verificationToken = await EmailVerificationToken.findOne({
+    where: { token },
+    include: {
+      model: User,
+      as: 'user'
+    }
+  });
+
+  if (!verificationToken) {
+    throw new BadRequestError('El token de verificación no es válido');
+  }
+
+  if (verificationToken.verified) {
+    throw new BadRequestError('Este email ya ha sido verificado');
+  }
+
+  if (new Date() > verificationToken.expiresAt) {
+    throw new BadRequestError('El token de verificación ha expirado');
+  }
+
+  return verificationToken;
+};
+
+/**
+ * Verificar email
+ */
+exports.verifyEmail = async (token) => {
+  const verificationToken = await exports.validateEmailVerificationToken(token);
+  const user = verificationToken.user;
+
+  // Actualizar email si es diferente
+  if (user.email !== verificationToken.email) {
+    user.email = verificationToken.email;
+  }
+
+  user.emailVerified = true;
+  user.emailVerificationToken = null;
+  await user.save();
+
+  verificationToken.verified = true;
+  await verificationToken.save();
+
+  logger.info(`Email verificado para ${user.email}`);
+  return { message: 'Tu email ha sido verificado exitosamente' };
 };

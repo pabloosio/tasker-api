@@ -48,7 +48,38 @@ const loginSchema = Joi.object({
     })
 });
 
+// Schema para forgot password
+const forgotPasswordSchema = Joi.object({
+  email: Joi.string()
+    .email()
+    .required()
+    .messages({
+      'string.empty': 'El email es requerido',
+      'string.email': 'Debe ser un email válido'
+    })
+});
+
+// Schema para reset password
+const resetPasswordSchema = Joi.object({
+  token: Joi.string()
+    .required()
+    .messages({
+      'string.empty': 'El token es requerido'
+    }),
+
+  newPassword: Joi.string()
+    .min(6)
+    .max(255)
+    .required()
+    .messages({
+      'string.empty': 'La contraseña es requerida',
+      'string.min': 'La contraseña debe tener al menos 6 caracteres'
+    })
+});
+
 module.exports = {
   validateRegister: validate(registerSchema),
-  validateLogin: validate(loginSchema)
+  validateLogin: validate(loginSchema),
+  validateForgotPassword: validate(forgotPasswordSchema),
+  validateResetPassword: validate(resetPasswordSchema)
 };

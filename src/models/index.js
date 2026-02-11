@@ -20,7 +20,9 @@ const db = {
   Category: require('./Category')(sequelize, Sequelize.DataTypes),
   AuthLog: require('./AuthLog')(sequelize, Sequelize.DataTypes),
   Workspace: require('./Workspace')(sequelize, Sequelize.DataTypes),
-  WorkspaceMember: require('./WorkspaceMember')(sequelize, Sequelize.DataTypes)
+  WorkspaceMember: require('./WorkspaceMember')(sequelize, Sequelize.DataTypes),
+  PasswordResetToken: require('./PasswordResetToken')(sequelize, Sequelize.DataTypes),
+  EmailVerificationToken: require('./EmailVerificationToken')(sequelize, Sequelize.DataTypes)
 };
 
 // Configurar asociaciones

@@ -16,6 +16,7 @@
   "license": "ISC",
   "description": "API REST para gestor de tareas con Express, Node.js, Sequelize y MySQL",
   "dependencies": {
+    "aws-sdk": "^2.1693.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
