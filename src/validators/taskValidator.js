@@ -35,7 +35,14 @@ const taskSchema = Joi.object({
   
   dueDate: Joi.date()
     .iso()
-    .min('now')
+    .custom((value, helpers) => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (value < today) {
+        return helpers.error('date.min');
+      }
+      return value;
+    })
     .allow(null)
     .messages({
       'date.base': 'La fecha debe ser válida',
