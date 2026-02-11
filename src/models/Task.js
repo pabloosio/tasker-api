@@ -41,11 +41,8 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false
     },
     dueDate: {
-      type:  DataTypes.DATE,
-      allowNull: true,
-      validate: {
-        isDate: { msg: 'Debe ser una fecha válida' }
-      }
+      type: DataTypes.DATEONLY,
+      allowNull: true
     },
     completedAt: {
       type: DataTypes.DATE,

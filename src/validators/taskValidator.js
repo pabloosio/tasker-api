@@ -33,20 +33,19 @@ const taskSchema = Joi.object({
       'any. only': `La prioridad debe ser: ${Object.values(TASK_PRIORITY).join(', ')}`
     }),
   
-  dueDate: Joi.date()
-    .iso()
+  dueDate: Joi.string()
+    .pattern(/^\d{4}-\d{2}-\d{2}$/)
     .custom((value, helpers) => {
       const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      if (value < today) {
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      if (value < todayStr) {
         return helpers.error('date.min');
       }
       return value;
     })
     .allow(null)
     .messages({
-      'date.base': 'La fecha debe ser válida',
-      'date.format': 'La fecha debe estar en formato ISO',
+      'string.pattern.base': 'La fecha debe tener formato YYYY-MM-DD',
       'date.min': 'La fecha no puede ser en el pasado'
     }),
   
@@ -86,9 +85,12 @@ const taskUpdateSchema = Joi.object({
   priority: Joi.string()
     .valid(...Object.values(TASK_PRIORITY)),
   
-  dueDate:  Joi.date()
-    .iso()
-    .allow(null),
+  dueDate: Joi.string()
+    .pattern(/^\d{4}-\d{2}-\d{2}$/)
+    .allow(null)
+    .messages({
+      'string.pattern.base': 'La fecha debe tener formato YYYY-MM-DD'
+    }),
   
   categoryId: Joi.string()
     .uuid()
