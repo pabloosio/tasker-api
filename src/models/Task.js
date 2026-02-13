@@ -120,6 +120,12 @@ module.exports = (sequelize, DataTypes) => {
       foreignKey: 'assignedTo',
       as: 'assignee'
     });
+
+    Task.hasMany(models.ChecklistItem, {
+      foreignKey: 'taskId',
+      as: 'checklistItems',
+      onDelete: 'CASCADE'
+    });
   };
 
   return Task;

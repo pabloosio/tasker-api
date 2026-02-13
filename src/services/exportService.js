@@ -148,6 +148,8 @@ exports.generatePdf = async (userId) => {
     const doc = new PDFDocument({
       size: 'A4',
       margin: 50,
+      // Necesario para poder iterar páginas y escribir footer al final
+      bufferPages: true,
       info: {
         Title: 'Tasker - Mis Tareas',
         Author: 'Tasker App'
@@ -241,10 +243,10 @@ exports.generatePdf = async (userId) => {
 
     // Footer
     const pages = doc.bufferedPageRange();
-    for (let i = 0; i < pages.count; i++) {
+    for (let i = pages.start; i < pages.start + pages.count; i++) {
       doc.switchToPage(i);
       doc.fontSize(8).fillColor('#8994A2')
-        .text(`Página ${i + 1} de ${pages.count}`, 50, 780, { align: 'center' });
+        .text(`Página ${i - pages.start + 1} de ${pages.count}`, 50, 780, { align: 'center' });
     }
 
     doc.end();

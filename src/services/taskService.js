@@ -1,4 +1,4 @@
-const { Task, Category, User, WorkspaceMember } = require('../models');
+const { Task, Category, User, WorkspaceMember, ChecklistItem } = require('../models');
 const { NotFoundError, ForbiddenError } = require('../utils/errors');
 const { PAGINATION, TASK_STATUS, TASK_PRIORITY } = require('../config/constants');
 const { Op } = require('sequelize');
@@ -32,6 +32,12 @@ const taskIncludes = [
     model: User,
     as: 'assignee',
     attributes: ['id', 'name', 'email']
+  },
+  {
+    model: ChecklistItem,
+    as: 'checklistItems',
+    attributes: ['id', 'content', 'isCompleted', 'completedAt', 'position'],
+    order: [['position', 'ASC'], ['createdAt', 'ASC']]
   }
 ];
 
