@@ -135,7 +135,8 @@ exports.login = async ({ email, password }, reqInfo = {}) => {
       name: user.name,
       email: user.email,
       role: user.role,
-      lastLogin: user.lastLogin
+      lastLogin: user.lastLogin,
+      pinnedWorkspaceId: user.pinnedWorkspaceId || null
     },
     token
   };

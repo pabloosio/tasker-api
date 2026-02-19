@@ -63,6 +63,11 @@ module.exports = (sequelize, DataTypes) => {
     emailVerificationToken: {
       type: DataTypes.STRING(255),
       allowNull: true
+    },
+    pinnedWorkspaceId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      field: 'pinned_workspace_id'
     }
   }, {
     tableName: 'users',
@@ -120,6 +125,12 @@ module.exports = (sequelize, DataTypes) => {
       foreignKey: 'userId',
       as: 'workspaceMemberships',
       onDelete: 'CASCADE'
+    });
+
+    User.belongsTo(models.Workspace, {
+      foreignKey: 'pinnedWorkspaceId',
+      as: 'pinnedWorkspace',
+      constraints: false
     });
   };
 
