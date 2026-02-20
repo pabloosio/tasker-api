@@ -28,7 +28,9 @@ const limiter = rateLimit({
   legacyHeaders: false
 });
 
-app.use('/api/', limiter);
+if (config.node_env !== 'development') {
+  app.use('/api/', limiter);
+}
 
 // ========== Parseo de Body ==========
 app.use(express.json({ limit: '10mb' }));
