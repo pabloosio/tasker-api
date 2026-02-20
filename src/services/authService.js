@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const { User, AuthLog, Workspace, WorkspaceMember, PasswordResetToken, EmailVerificationToken } = require('../models');
+const { User, AuthLog, Workspace, WorkspaceMember, Category, PasswordResetToken, EmailVerificationToken } = require('../models');
 const { WORKSPACE_ROLES } = require('../config/constants');
 const { UnauthorizedError, BadRequestError, NotFoundError } = require('../utils/errors');
 const config = require('../config/env');
@@ -49,7 +49,7 @@ exports.register = async (userData, reqInfo = {}) => {
 
   // Crear workspace personal
   const personalWorkspace = await Workspace.create({
-    name: 'Personal',
+    name: '🧍‍♂️ Personal',
     description: 'Espacio de trabajo personal',
     ownerId: user.id,
     isPersonal: true
@@ -60,6 +60,38 @@ exports.register = async (userData, reqInfo = {}) => {
     userId: user.id,
     role: WORKSPACE_ROLES.OWNER
   });
+
+  // Crear workspace de trabajo
+  const trabajoWorkspace = await Workspace.create({
+    name: '💼 Trabajo',
+    description: 'Espacio de trabajo profesional',
+    ownerId: user.id,
+    isPersonal: false
+  });
+
+  await WorkspaceMember.create({
+    workspaceId: trabajoWorkspace.id,
+    userId: user.id,
+    role: WORKSPACE_ROLES.OWNER
+  });
+
+  // Categorías predeterminadas para Personal
+  await Category.bulkCreate([
+    { name: 'Casa',               description: 'Limpieza, organización, reparaciones, compras del hogar', color: '#10B981', userId: user.id, workspaceId: personalWorkspace.id },
+    { name: 'Salud',              description: 'Ejercicio, citas médicas, medicamentos, descanso',         color: '#EF4444', userId: user.id, workspaceId: personalWorkspace.id },
+    { name: 'Finanzas',           description: 'Pagos, presupuesto, ahorro, revisión de gastos',           color: '#F59E0B', userId: user.id, workspaceId: personalWorkspace.id },
+    { name: 'Social',             description: 'Llamadas, reuniones, eventos, celebraciones',              color: '#8B5CF6', userId: user.id, workspaceId: personalWorkspace.id },
+    { name: 'Desarrollo Personal',description: 'Lectura, estudio, hábitos, metas personales',             color: '#3B82F6', userId: user.id, workspaceId: personalWorkspace.id }
+  ]);
+
+  // Categorías predeterminadas para Trabajo
+  await Category.bulkCreate([
+    { name: 'Rutina',        description: 'Actividades diarias, correos, seguimiento, pendientes administrativos',       color: '#6366F1', userId: user.id, workspaceId: trabajoWorkspace.id },
+    { name: 'Proyectos',     description: 'Avances, entregables, implementación, tareas asignadas',                     color: '#0EA5E9', userId: user.id, workspaceId: trabajoWorkspace.id },
+    { name: 'Bugs & QA',     description: 'Errores, incidencias, correcciones, pruebas',                               color: '#F97316', userId: user.id, workspaceId: trabajoWorkspace.id },
+    { name: 'Reuniones',     description: 'Juntas, preparación, seguimiento de acuerdos, presentaciones',              color: '#EC4899', userId: user.id, workspaceId: trabajoWorkspace.id },
+    { name: 'Planificación', description: 'Prioridades, organización semanal, estimaciones, planificación estratégica', color: '#14B8A6', userId: user.id, workspaceId: trabajoWorkspace.id }
+  ]);
 
   // Enviar email de verificación
   await exports.requestEmailVerification(user.id);
