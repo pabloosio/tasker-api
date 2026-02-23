@@ -15,6 +15,9 @@ router.get('/', taskController.getAllTasks);
 // GET /api/v1/tasks/stats - Estadísticas de tareas
 router.get('/stats', taskController.getTaskStats);
 
+// GET /api/v1/tasks/weekly-report - Reporte semanal de productividad
+router.get('/weekly-report', taskController.getWeeklyReport);
+
 // POST /api/v1/tasks - Crear nueva tarea
 router.post('/', validateTask, taskController.createTask);
 

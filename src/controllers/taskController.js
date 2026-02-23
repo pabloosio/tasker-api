@@ -89,6 +89,19 @@ exports.updateTaskStatus = async (req, res, next) => {
 };
 
 /**
+ * Obtener reporte semanal de productividad
+ * GET /api/v1/tasks/weekly-report
+ */
+exports.getWeeklyReport = async (req, res, next) => {
+  try {
+    const report = await taskService.getWeeklyReport(req.user.id, req.query);
+    return successResponse(res, report, 'Reporte semanal obtenido exitosamente');
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * Eliminar tarea
  * DELETE /api/v1/tasks/:id
  */

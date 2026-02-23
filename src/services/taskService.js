@@ -256,6 +256,101 @@ exports.updateTaskStatus = async (userId, taskId, status) => {
 };
 
 /**
+ * Obtener reporte semanal de productividad
+ *
+ * @param {string} userId - ID del usuario
+ * @param {object} filters - Filtros opcionales (workspaceId, weekOffset)
+ * @param {number} filters.weekOffset - Desplazamiento de semanas (0=actual, -1=pasada, etc.)
+ * @param {string} filters.workspaceId - Filtrar por workspace
+ * @returns {object} Reporte semanal con tareas completadas y creadas
+ */
+exports.getWeeklyReport = async (userId, filters = {}) => {
+  const { workspaceId, weekOffset = 0 } = filters;
+  const where = {};
+
+  if (workspaceId) {
+    const membership = await WorkspaceMember.findOne({
+      where: { workspaceId, userId }
+    });
+    if (!membership) {
+      throw new ForbiddenError('No tienes acceso a este workspace');
+    }
+    where.workspaceId = workspaceId;
+  } else {
+    where.userId = userId;
+  }
+
+  // Calcular lunes y domingo de la semana objetivo
+  const now = new Date();
+  const daysFromMonday = (now.getDay() + 6) % 7; // 0=lunes, ..., 6=domingo
+
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - daysFromMonday + parseInt(weekOffset) * 7);
+  monday.setHours(0, 0, 0, 0);
+
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  sunday.setHours(23, 59, 59, 999);
+
+  // Tareas completadas en la semana (usando completedAt)
+  const completedTasks = await Task.findAll({
+    where: {
+      ...where,
+      completedAt: { [Op.between]: [monday, sunday] }
+    },
+    include: [{ model: Category, as: 'category', attributes: ['id', 'name', 'color'] }],
+    attributes: ['id', 'title', 'priority', 'completedAt', 'categoryId']
+  });
+
+  // Total de tareas creadas en la semana
+  const createdCount = await Task.count({
+    where: {
+      ...where,
+      createdAt: { [Op.between]: [monday, sunday] }
+    }
+  });
+
+  // Agrupar completadas por prioridad
+  const byPriority = {
+    [TASK_PRIORITY.HIGH]: completedTasks.filter(t => t.priority === TASK_PRIORITY.HIGH).length,
+    [TASK_PRIORITY.MEDIUM]: completedTasks.filter(t => t.priority === TASK_PRIORITY.MEDIUM).length,
+    [TASK_PRIORITY.LOW]: completedTasks.filter(t => t.priority === TASK_PRIORITY.LOW).length
+  };
+
+  // Agrupar completadas por categoría
+  const categoryMap = {};
+  completedTasks.forEach(task => {
+    if (task.category) {
+      const key = task.category.id;
+      if (!categoryMap[key]) {
+        categoryMap[key] = { id: key, name: task.category.name, color: task.category.color, count: 0 };
+      }
+      categoryMap[key].count++;
+    }
+  });
+
+  const byCategory = Object.values(categoryMap).sort((a, b) => b.count - a.count);
+  const uncategorizedCount = completedTasks.filter(t => !t.categoryId).length;
+  if (uncategorizedCount > 0) {
+    byCategory.push({ id: null, name: 'Sin categoría', color: '#6c757d', count: uncategorizedCount });
+  }
+
+  return {
+    weekStart: monday.toISOString().split('T')[0],
+    weekEnd: sunday.toISOString().split('T')[0],
+    weekOffset: parseInt(weekOffset),
+    completed: {
+      total: completedTasks.length,
+      byPriority,
+      byCategory
+    },
+    created: {
+      total: createdCount
+    }
+  };
+};
+
+/**
  * Eliminar tarea
  */
 exports.deleteTask = async (userId, taskId) => {
