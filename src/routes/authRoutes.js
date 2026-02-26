@@ -9,6 +9,12 @@ router.post('/register', validateRegister, authController.register);
 // POST /api/v1/auth/login - Iniciar sesión
 router.post('/login', validateLogin, authController.login);
 
+// POST /api/v1/auth/refresh - Renovar access token con refresh token
+router.post('/refresh', authController.refresh);
+
+// POST /api/v1/auth/logout - Cerrar sesión / revocar refresh token
+router.post('/logout', authController.logout);
+
 // POST /api/v1/auth/forgot-password - Solicitar reinicio de contraseña
 router.post('/forgot-password', validateForgotPassword, authController.forgotPassword);
 

@@ -23,7 +23,8 @@ const db = {
   WorkspaceMember: require('./WorkspaceMember')(sequelize, Sequelize.DataTypes),
   PasswordResetToken: require('./PasswordResetToken')(sequelize, Sequelize.DataTypes),
   EmailVerificationToken: require('./EmailVerificationToken')(sequelize, Sequelize.DataTypes),
-  ChecklistItem: require('./ChecklistItem')(sequelize, Sequelize.DataTypes)
+  ChecklistItem: require('./ChecklistItem')(sequelize, Sequelize.DataTypes),
+  RefreshToken: require('./RefreshToken')(sequelize, Sequelize.DataTypes)
 };
 
 // Configurar asociaciones

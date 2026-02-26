@@ -1,11 +1,14 @@
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const { User, AuthLog, Workspace, WorkspaceMember, Category, PasswordResetToken, EmailVerificationToken } = require('../models');
+const { User, AuthLog, Workspace, WorkspaceMember, Category, PasswordResetToken, EmailVerificationToken, RefreshToken } = require('../models');
 const { WORKSPACE_ROLES } = require('../config/constants');
 const { UnauthorizedError, BadRequestError, NotFoundError } = require('../utils/errors');
 const config = require('../config/env');
 const logger = require('../utils/logger');
 const emailService = require('./emailService');
+
+// Duración del refresh token: 30 días (configurable con REFRESH_TOKEN_EXPIRY_DAYS)
+const REFRESH_TOKEN_EXPIRY_DAYS = parseInt(process.env.REFRESH_TOKEN_EXPIRY_DAYS) || 30;
 
 /**
  * Registrar un evento de autenticación
@@ -16,6 +19,24 @@ const logAuthEvent = async (eventType, email, { userId = null, ipAddress = null,
   } catch (err) {
     logger.error('Error al guardar auth log:', err);
   }
+};
+
+/**
+ * Hashear un token para almacenamiento seguro
+ */
+const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
+
+/**
+ * Generar y almacenar un refresh token
+ */
+const createRefreshToken = async (userId, deviceId = null) => {
+  const plainToken = crypto.randomBytes(40).toString('hex');
+  const tokenHash = hashToken(plainToken);
+  const expiresAt = new Date(Date.now() + REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
+
+  await RefreshToken.create({ userId, tokenHash, deviceId, expiresAt });
+
+  return plainToken;
 };
 
 /**
@@ -158,8 +179,57 @@ exports.login = async ({ email, password }, reqInfo = {}) => {
     ...reqInfo
   });
 
-  // Generar token
-  const token = generateToken(user);
+  const accessToken = generateToken(user);
+  const refreshToken = await createRefreshToken(user.id);
+
+  const userData = {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    lastLogin: user.lastLogin,
+    pinnedWorkspaceId: user.pinnedWorkspaceId || null
+  };
+
+  return {
+    user: userData,
+    token: accessToken,       // mantenido para compatibilidad con web
+    accessToken,
+    refreshToken
+  };
+};
+
+/**
+ * Rotar refresh token — verifica el token entrante, emite uno nuevo
+ */
+exports.refreshToken = async (refreshToken, deviceId = null) => {
+  const tokenHash = hashToken(refreshToken);
+
+  const stored = await RefreshToken.findOne({
+    where: { tokenHash },
+    include: { model: User, as: 'user' }
+  });
+
+  if (!stored) {
+    throw new UnauthorizedError('Refresh token inválido');
+  }
+
+  if (new Date() > stored.expiresAt) {
+    await stored.destroy();
+    throw new UnauthorizedError('Refresh token expirado');
+  }
+
+  const user = stored.user;
+
+  if (!user || !user.isActive || !user.emailVerified) {
+    await stored.destroy();
+    throw new UnauthorizedError('Usuario no autorizado');
+  }
+
+  // Rotar: eliminar el viejo, crear el nuevo
+  await stored.destroy();
+  const newRefreshToken = await createRefreshToken(user.id, deviceId);
+  const newAccessToken = generateToken(user);
 
   return {
     user: {
@@ -167,11 +237,19 @@ exports.login = async ({ email, password }, reqInfo = {}) => {
       name: user.name,
       email: user.email,
       role: user.role,
-      lastLogin: user.lastLogin,
       pinnedWorkspaceId: user.pinnedWorkspaceId || null
     },
-    token
+    accessToken: newAccessToken,
+    refreshToken: newRefreshToken
   };
+};
+
+/**
+ * Revocar refresh token (logout del dispositivo)
+ */
+exports.revokeRefreshToken = async (refreshToken) => {
+  const tokenHash = hashToken(refreshToken);
+  await RefreshToken.destroy({ where: { tokenHash } });
 };
 
 /**

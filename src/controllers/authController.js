@@ -13,12 +13,7 @@ const getRequestInfo = (req) => ({
 exports.register = async (req, res, next) => {
   try {
     const result = await authService.register(req.body, getRequestInfo(req));
-    return successResponse(
-      res,
-      result,
-      'Usuario registrado exitosamente',
-      201
-    );
+    return successResponse(res, result, 'Usuario registrado exitosamente', 201);
   } catch (error) {
     next(error);
   }
@@ -32,6 +27,39 @@ exports.login = async (req, res, next) => {
   try {
     const result = await authService.login(req.body, getRequestInfo(req));
     return successResponse(res, result, 'Login exitoso');
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Refrescar access token usando refresh token
+ * POST /api/v1/auth/refresh
+ */
+exports.refresh = async (req, res, next) => {
+  try {
+    const { refreshToken, deviceId } = req.body;
+    if (!refreshToken) {
+      return res.status(400).json({ success: false, message: 'refreshToken requerido' });
+    }
+    const result = await authService.refreshToken(refreshToken, deviceId || null);
+    return successResponse(res, result, 'Token renovado');
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Cerrar sesión — revoca el refresh token del dispositivo
+ * POST /api/v1/auth/logout
+ */
+exports.logout = async (req, res, next) => {
+  try {
+    const { refreshToken } = req.body;
+    if (refreshToken) {
+      await authService.revokeRefreshToken(refreshToken);
+    }
+    return successResponse(res, {}, 'Sesión cerrada');
   } catch (error) {
     next(error);
   }
