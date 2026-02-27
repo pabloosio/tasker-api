@@ -6,6 +6,9 @@ const authenticate = require('../middlewares/auth');
 // Todas las rutas requieren autenticación
 router.use(authenticate);
 
+// GET /api/v1/export/report - Datos del reporte en JSON (para preview)
+router.get('/report', exportController.getReport);
+
 // GET /api/v1/export/excel - Descargar tareas en Excel
 router.get('/excel', exportController.exportExcel);
 

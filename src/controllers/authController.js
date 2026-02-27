@@ -25,6 +25,7 @@ exports.register = async (req, res, next) => {
  */
 exports.login = async (req, res, next) => {
   try {
+    console.log("login",req.body)
     const result = await authService.login(req.body, getRequestInfo(req));
     return successResponse(res, result, 'Login exitoso');
   } catch (error) {
