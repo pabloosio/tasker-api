@@ -2,7 +2,6 @@ const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
 const morgan = require('morgan');
-const rateLimit = require('express-rate-limit');
 const routes = require('./routes');
 const errorHandler = require('./middlewares/errorHandler');
 const config = require('./config/env');
@@ -16,21 +15,6 @@ app.use(cors({
   credentials: true
 }));
 
-// Rate limiting - Limitar requests por IP
-const limiter = rateLimit({
-  windowMs: config.rateLimit.windowMs * 60 * 1000,
-  max: config.rateLimit.max,
-  message: {
-    success: false,
-    message: 'Demasiadas peticiones desde esta IP, intenta de nuevo más tarde'
-  },
-  standardHeaders: true,
-  legacyHeaders: false
-});
-
-if (config.node_env !== 'development') {
-  app.use('/api/', limiter);
-}
 
 // ========== Parseo de Body ==========
 app.use(express.json({ limit: '10mb' }));
