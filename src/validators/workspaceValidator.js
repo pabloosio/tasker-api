@@ -21,22 +21,15 @@ const workspaceSchema = Joi.object({
     })
 });
 
+// Acepta userId (web) o email (mobile) — al menos uno es requerido
 const inviteMemberSchema = Joi.object({
-  userId: Joi.string()
-    .uuid()
-    .required()
-    .messages({
-      'string.empty': 'El usuario es requerido',
-      'string.guid': 'ID de usuario inválido'
-    }),
-
+  userId: Joi.string().uuid().messages({ 'string.guid': 'ID de usuario inválido' }),
+  email: Joi.string().email().lowercase().messages({ 'string.email': 'Email inválido' }),
   role: Joi.string()
     .valid(WORKSPACE_ROLES.ADMIN, WORKSPACE_ROLES.MEMBER)
     .default(WORKSPACE_ROLES.MEMBER)
-    .messages({
-      'any.only': `El rol debe ser: ${WORKSPACE_ROLES.ADMIN} o ${WORKSPACE_ROLES.MEMBER}`
-    })
-});
+    .messages({ 'any.only': `El rol debe ser: ${WORKSPACE_ROLES.ADMIN} o ${WORKSPACE_ROLES.MEMBER}` })
+}).or('userId', 'email').messages({ 'object.missing': 'Se requiere userId o email' });
 
 const updateMemberRoleSchema = Joi.object({
   role: Joi.string()

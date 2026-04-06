@@ -124,7 +124,123 @@ const sendPasswordResetEmail = async (email, resetToken, userName) => {
   }
 };
 
+/**
+ * Enviar email de invitación a un workspace
+ */
+const sendWorkspaceInviteEmail = async ({ inviteeEmail, inviteeName, inviterName, workspaceName, workspaceDesc, role }) => {
+  const appUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const roleLabel = role === 'ADMIN' ? 'Administrador' : 'Miembro';
+  const roleColor = role === 'ADMIN' ? '#7c3aed' : '#2563eb';
+  const wsInitial = workspaceName.charAt(0).toUpperCase();
+
+  const params = {
+    Source: config.aws.sesFromEmail,
+    Destination: { ToAddresses: [inviteeEmail] },
+    Message: {
+      Subject: {
+        Data: `${inviterName} te agregó al tablero "${workspaceName}" en Tasker`,
+        Charset: 'UTF-8'
+      },
+      Body: {
+        Html: {
+          Data: `
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:40px 0;">
+<tr><td align="center">
+<table width="580" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+
+  <tr>
+    <td style="background:#6f63c6;padding:32px 40px;text-align:center;">
+      <h1 style="color:#fff;margin:0;font-size:24px;font-weight:700;">Tasker</h1>
+      <p style="color:rgba(255,255,255,0.8);margin:6px 0 0;font-size:14px;">Gestión de tareas colaborativa</p>
+    </td>
+  </tr>
+
+  <tr><td style="padding:36px 40px;">
+    <h2 style="color:#111827;margin:0 0 8px;font-size:20px;">Hola${inviteeName ? ' ' + inviteeName : ''}!</h2>
+    <p style="color:#6b7280;font-size:15px;line-height:1.6;margin:0 0 28px;">
+      <strong style="color:#111827;">${inviterName}</strong> te ha agregado a un espacio de trabajo en Tasker.
+    </p>
+
+    <table width="100%" cellpadding="0" cellspacing="0"
+           style="background:#f5f3ff;border:2px solid #6f63c6;border-radius:10px;margin-bottom:28px;">
+      <tr><td style="padding:24px;">
+        <div style="width:44px;height:44px;background:#6f63c6;border-radius:10px;text-align:center;
+                    line-height:44px;font-size:20px;font-weight:700;color:#fff;margin-bottom:12px;">
+          ${wsInitial}
+        </div>
+        <h3 style="color:#111827;margin:0 0 4px;font-size:18px;">${workspaceName}</h3>
+        ${workspaceDesc ? `<p style="color:#6b7280;font-size:13px;margin:0 0 12px;">${workspaceDesc}</p>` : ''}
+        <span style="display:inline-block;background:${roleColor}22;color:${roleColor};
+                     padding:4px 12px;border-radius:999px;font-size:12px;font-weight:700;">
+          ${roleLabel}
+        </span>
+      </td></tr>
+    </table>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+      <tr><td style="padding:10px 0;border-bottom:1px solid #f3f4f6;">
+        <span style="color:#9ca3af;font-size:13px;">Invitado por</span>
+        <span style="float:right;color:#111827;font-size:13px;font-weight:600;">${inviterName}</span>
+      </td></tr>
+      <tr><td style="padding:10px 0;border-bottom:1px solid #f3f4f6;">
+        <span style="color:#9ca3af;font-size:13px;">Tablero</span>
+        <span style="float:right;color:#111827;font-size:13px;font-weight:600;">${workspaceName}</span>
+      </td></tr>
+      <tr><td style="padding:10px 0;">
+        <span style="color:#9ca3af;font-size:13px;">Tu rol</span>
+        <span style="float:right;color:${roleColor};font-size:13px;font-weight:700;">${roleLabel}</span>
+      </td></tr>
+    </table>
+
+    <div style="text-align:center;margin-bottom:28px;">
+      <a href="${appUrl}"
+         style="display:inline-block;background:#6f63c6;color:#fff;padding:14px 36px;
+                text-decoration:none;border-radius:8px;font-size:15px;font-weight:700;">
+        Abrir Tasker
+      </a>
+    </div>
+
+    <p style="color:#9ca3af;font-size:12px;text-align:center;margin:0;line-height:1.6;">
+      Si no esperabas esta invitación puedes ignorar este correo.<br>
+      Ya tienes acceso al tablero con tu cuenta actual.
+    </p>
+  </td></tr>
+
+  <tr>
+    <td style="background:#f9fafb;padding:20px 40px;text-align:center;border-top:1px solid #f3f4f6;">
+      <p style="color:#d1d5db;font-size:11px;margin:0;">
+        &copy; ${new Date().getFullYear()} Tasker &middot; Este correo fue generado automáticamente
+      </p>
+    </td>
+  </tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>`,
+          Charset: 'UTF-8'
+        }
+      }
+    }
+  };
+
+  try {
+    const result = await ses.sendEmail(params).promise();
+    logger.info(`Email de invitación enviado a ${inviteeEmail} (workspace: "${workspaceName}")`, { messageId: result.MessageId });
+    return result;
+  } catch (error) {
+    // No bloquear la invitación si el email falla
+    logger.error(`Error al enviar email de invitación a ${inviteeEmail}`, error);
+  }
+};
+
 module.exports = {
   sendVerificationEmail,
-  sendPasswordResetEmail
+  sendPasswordResetEmail,
+  sendWorkspaceInviteEmail
 };

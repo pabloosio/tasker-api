@@ -1,6 +1,7 @@
 const { Workspace, WorkspaceMember, User } = require('../models');
 const { NotFoundError, ForbiddenError, BadRequestError } = require('../utils/errors');
 const { WORKSPACE_ROLES } = require('../config/constants');
+const { sendWorkspaceInviteEmail } = require('./emailService');
 
 /**
  * Verificar que el usuario es miembro del workspace
@@ -171,44 +172,56 @@ exports.getWorkspaceMembers = async (userId, workspaceId) => {
 };
 
 /**
- * Invitar miembro por userId
+ * Invitar miembro — acepta { userId } (web) o { email } (mobile)
  */
-exports.inviteMember = async (userId, workspaceId, inviteeUserId, role = WORKSPACE_ROLES.MEMBER) => {
-  await verifyAdminAccess(userId, workspaceId);
+exports.inviteMember = async (inviterId, workspaceId, { userId: inviteeUserId, email: inviteeEmail }, role = WORKSPACE_ROLES.MEMBER) => {
+  await verifyAdminAccess(inviterId, workspaceId);
 
-  const workspace = await Workspace.findByPk(workspaceId);
-  if (workspace.isPersonal) {
-    throw new BadRequestError('No se pueden invitar miembros al workspace personal');
+  const workspace = await Workspace.findByPk(workspaceId, {
+    include: [{ model: User, as: 'owner', attributes: ['id', 'name', 'email'] }]
+  });
+  if (!workspace) throw new NotFoundError('Workspace no encontrado');
+  if (workspace.isPersonal) throw new BadRequestError('No se pueden invitar miembros al workspace personal');
+
+  // Resolver usuario por userId o email
+  let userToInvite;
+  if (inviteeUserId) {
+    userToInvite = await User.findByPk(inviteeUserId);
+  } else {
+    userToInvite = await User.findOne({ where: { email: inviteeEmail.toLowerCase() } });
   }
 
-  // Verificar que el usuario existe y está activo
-  const userToInvite = await User.findByPk(inviteeUserId);
   if (!userToInvite || !userToInvite.isActive) {
     throw new BadRequestError('Usuario no encontrado o inactivo');
   }
 
   // Verificar que no sea ya miembro
   const existingMember = await WorkspaceMember.findOne({
-    where: { workspaceId, userId: inviteeUserId }
+    where: { workspaceId, userId: userToInvite.id }
   });
-  if (existingMember) {
-    throw new BadRequestError('Este usuario ya es miembro del workspace');
-  }
+  if (existingMember) throw new BadRequestError('Este usuario ya es miembro del workspace');
 
   const member = await WorkspaceMember.create({
     workspaceId,
-    userId: inviteeUserId,
+    userId: userToInvite.id,
+    role
+  });
+
+  // Obtener datos del invitador para el email
+  const inviter = await User.findByPk(inviterId, { attributes: ['name'] });
+
+  // Enviar correo de notificación (sin await para no bloquear la respuesta)
+  sendWorkspaceInviteEmail({
+    inviteeEmail: userToInvite.email,
+    inviteeName: userToInvite.name,
+    inviterName: inviter?.name ?? 'Un compañero',
+    workspaceName: workspace.name,
+    workspaceDesc: workspace.description,
     role
   });
 
   return await WorkspaceMember.findByPk(member.id, {
-    include: [
-      {
-        model: User,
-        as: 'user',
-        attributes: ['id', 'name', 'email']
-      }
-    ]
+    include: [{ model: User, as: 'user', attributes: ['id', 'name', 'email'] }]
   });
 };
 

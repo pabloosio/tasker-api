@@ -60,7 +60,7 @@ exports.inviteMember = async (req, res, next) => {
     const member = await workspaceService.inviteMember(
       req.user.id,
       req.params.id,
-      req.body.userId,
+      { userId: req.body.userId, email: req.body.email },
       req.body.role
     );
     return successResponse(res, member, 'Miembro invitado exitosamente', 201);
