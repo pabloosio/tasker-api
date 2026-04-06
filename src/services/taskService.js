@@ -1,6 +1,6 @@
 const { Task, Category, User, WorkspaceMember, ChecklistItem } = require('../models');
 const { NotFoundError, ForbiddenError } = require('../utils/errors');
-const { PAGINATION, TASK_STATUS, TASK_PRIORITY } = require('../config/constants');
+const { PAGINATION, TASK_STATUS, TASK_PRIORITY, WORKSPACE_ROLES } = require('../config/constants');
 const { Op } = require('sequelize');
 
 /**
@@ -17,6 +17,22 @@ const verifyTaskAccess = async (userId, task) => {
   }
 
   throw new ForbiddenError('No tienes permiso para acceder a esta tarea');
+};
+
+/**
+ * Verificar que el usuario puede escribir en el workspace de una tarea
+ */
+const verifyTaskWriteAccess = async (userId, task) => {
+  await verifyTaskAccess(userId, task);
+
+  if (task.workspaceId) {
+    const membership = await WorkspaceMember.findOne({
+      where: { workspaceId: task.workspaceId, userId }
+    });
+    if (membership?.role === WORKSPACE_ROLES.VIEWER) {
+      throw new ForbiddenError('Los observadores no pueden modificar tareas');
+    }
+  }
 };
 
 /**
@@ -51,6 +67,8 @@ exports.getAllTasks = async (userId, filters = {}) => {
     categoryId,
     search,
     workspaceId,
+    dueDateFrom,
+    dueDateTo,
     page = PAGINATION.DEFAULT_PAGE,
     limit = PAGINATION.DEFAULT_LIMIT
   } = filters;
@@ -75,6 +93,13 @@ exports.getAllTasks = async (userId, filters = {}) => {
   if (status) where.status = status;
   if (priority) where.priority = priority;
   if (categoryId) where.categoryId = categoryId;
+
+  // Filtro por rango de fecha programada (dueDate)
+  if (dueDateFrom || dueDateTo) {
+    where.dueDate = {};
+    if (dueDateFrom) where.dueDate[Op.gte] = dueDateFrom;
+    if (dueDateTo)   where.dueDate[Op.lte] = dueDateTo;
+  }
 
   // Búsqueda por texto
   if (search) {
@@ -182,6 +207,9 @@ exports.createTask = async (userId, taskData) => {
     if (!membership) {
       throw new ForbiddenError('No tienes acceso a este workspace');
     }
+    if (membership.role === WORKSPACE_ROLES.VIEWER) {
+      throw new ForbiddenError('Los observadores no pueden crear tareas');
+    }
 
     // Si tiene assignedTo, verificar que el asignado sea miembro
     if (taskData.assignedTo) {
@@ -214,7 +242,7 @@ exports.updateTask = async (userId, taskId, taskData) => {
     throw new NotFoundError('Tarea no encontrada');
   }
 
-  await verifyTaskAccess(userId, task);
+  await verifyTaskWriteAccess(userId, task);
 
   // Si cambió el status, actualizar statusUpdatedAt
   if (taskData.status && taskData.status !== task.status) {
@@ -360,7 +388,7 @@ exports.deleteTask = async (userId, taskId) => {
     throw new NotFoundError('Tarea no encontrada');
   }
 
-  await verifyTaskAccess(userId, task);
+  await verifyTaskWriteAccess(userId, task);
 
   await task.destroy();
 };

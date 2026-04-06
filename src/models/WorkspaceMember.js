@@ -27,7 +27,8 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.ENUM(
         WORKSPACE_ROLES.OWNER,
         WORKSPACE_ROLES.ADMIN,
-        WORKSPACE_ROLES.MEMBER
+        WORKSPACE_ROLES.MEMBER,
+        WORKSPACE_ROLES.VIEWER
       ),
       defaultValue: WORKSPACE_ROLES.MEMBER,
       allowNull: false
