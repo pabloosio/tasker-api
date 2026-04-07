@@ -1,7 +1,8 @@
-const { Task, Category, User, WorkspaceMember, ChecklistItem } = require('../models');
+const { Task, Category, User, WorkspaceMember, ChecklistItem, Workspace } = require('../models');
 const { NotFoundError, ForbiddenError } = require('../utils/errors');
 const { PAGINATION, TASK_STATUS, TASK_PRIORITY, WORKSPACE_ROLES } = require('../config/constants');
 const { Op } = require('sequelize');
+const { sendTaskAssignmentEmail } = require('./emailService');
 
 /**
  * Verificar acceso a una tarea (por ownership directo o membresía de workspace)
@@ -33,6 +34,33 @@ const verifyTaskWriteAccess = async (userId, task) => {
       throw new ForbiddenError('Los observadores no pueden modificar tareas');
     }
   }
+};
+
+/**
+ * Disparar email de asignación sin bloquear la respuesta.
+ * Solo envía si el asignado es diferente al que asigna.
+ */
+const notifyAssignment = async (assignerId, assigneeId, task) => {
+  if (!assigneeId) return;
+
+  const [assigner, assignee, workspace] = await Promise.all([
+    User.findByPk(assignerId, { attributes: ['name'] }),
+    User.findByPk(assigneeId, { attributes: ['name', 'email'] }),
+    task.workspaceId ? Workspace.findByPk(task.workspaceId, { attributes: ['name'] }) : null,
+  ]);
+
+  if (!assignee?.email) return;
+
+  sendTaskAssignmentEmail({
+    assigneeEmail: assignee.email,
+    assigneeName: assignee.name,
+    assignerName: assigner?.name ?? 'Un compañero',
+    taskTitle: task.title,
+    taskDescription: task.description,
+    priority: task.priority,
+    dueDate: task.dueDate,
+    workspaceName: workspace?.name ?? null,
+  });
 };
 
 /**
@@ -227,9 +255,12 @@ exports.createTask = async (userId, taskData) => {
     userId
   });
 
-  return await Task.findByPk(task.id, {
-    include: taskIncludes
-  });
+  const result = await Task.findByPk(task.id, { include: taskIncludes });
+
+  // Notificar al asignado si es alguien distinto al creador
+  notifyAssignment(userId, taskData.assignedTo, result);
+
+  return result;
 };
 
 /**
@@ -269,11 +300,18 @@ exports.updateTask = async (userId, taskId, taskData) => {
     }
   }
 
+  const previousAssignee = task.assignedTo;
   await task.update(taskData);
 
-  return await Task.findByPk(task.id, {
-    include: taskIncludes
-  });
+  const result = await Task.findByPk(task.id, { include: taskIncludes });
+
+  // Notificar solo si el asignado cambió y es alguien distinto al editor
+  const newAssignee = taskData.assignedTo;
+  if (newAssignee && newAssignee !== previousAssignee) {
+    notifyAssignment(userId, newAssignee, result);
+  }
+
+  return result;
 };
 
 /**
