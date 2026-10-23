@@ -134,6 +134,25 @@ module.exports = (sequelize, DataTypes) => {
       as: 'checklistItems',
       onDelete: 'CASCADE'
     });
+
+    Task.hasMany(models.Attachment, {
+      foreignKey: 'taskId',
+      as: 'attachments',
+      onDelete: 'CASCADE'
+    });
+
+    Task.hasMany(models.TaskComment, {
+      foreignKey: 'taskId',
+      as: 'comments',
+      onDelete: 'CASCADE'
+    });
+
+    Task.belongsToMany(models.User, {
+      through: models.TaskCollaborator,
+      foreignKey: 'taskId',
+      otherKey: 'userId',
+      as: 'collaborators'
+    });
   };
 
   return Task;

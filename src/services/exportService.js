@@ -1,7 +1,8 @@
 const ExcelJS = require('exceljs');
 const PDFDocument = require('pdfkit');
 const { Op } = require('sequelize');
-const { Task, Category, User, ChecklistItem } = require('../models');
+const { Task, Category, User, ChecklistItem, Workspace, WorkspaceMember } = require('../models');
+const { ForbiddenError } = require('../utils/errors');
 
 const { formatTaskKey } = require('../utils/taskKey');
 const STATUS_COLORS   = { BACKLOG: '#94A3B8', PENDING: '#F59E0B', IN_PROGRESS: '#0EA5E9', IN_REVIEW: '#8B5CF6', COMPLETED: '#22C55E' };
@@ -21,21 +22,37 @@ const fmtDateTime = (date) => {
 };
 
 /**
- * Obtener tareas filtradas con toda la información para el reporte
+ * Obtener tareas filtradas con toda la información para el reporte.
+ * - Con tablero: todas las tareas del tablero (hay que ser miembro).
+ * - Sin tablero: las tareas de todos los tableros del usuario (y las suyas sin tablero).
+ * - Con período: tareas creadas o completadas dentro del período.
  */
 const getFilteredTasks = async (userId, { startDate, endDate, workspaceId, categoryIds } = {}) => {
-  const where = { userId };
+  const memberships = await WorkspaceMember.findAll({ where: { userId }, attributes: ['workspaceId'] });
+  const workspaceIds = memberships.map((m) => m.workspaceId);
+
+  if (workspaceId && !workspaceIds.includes(workspaceId)) {
+    throw new ForbiddenError('No tienes acceso a este tablero');
+  }
+
+  const conditions = [
+    workspaceId
+      ? { workspaceId }
+      : { [Op.or]: [{ workspaceId: { [Op.in]: workspaceIds } }, { workspaceId: null, userId }] }
+  ];
 
   if (startDate && endDate) {
     const start = new Date(startDate); start.setHours(0, 0, 0, 0);
     const end   = new Date(endDate);   end.setHours(23, 59, 59, 999);
-    where[Op.or] = [
-      { createdAt:   { [Op.between]: [start, end] } },
-      { completedAt: { [Op.between]: [start, end] } }
-    ];
+    conditions.push({
+      [Op.or]: [
+        { createdAt:   { [Op.between]: [start, end] } },
+        { completedAt: { [Op.between]: [start, end] } }
+      ]
+    });
   }
 
-  if (workspaceId) where.workspaceId = workspaceId;
+  const where = { [Op.and]: conditions };
 
   const includeCategory = {
     model: Category, as: 'category',
@@ -54,7 +71,8 @@ const getFilteredTasks = async (userId, { startDate, endDate, workspaceId, categ
       includeCategory,
       { model: User, as: 'user',     attributes: ['id', 'name', 'email'] },
       { model: User, as: 'assignee', attributes: ['id', 'name', 'email'] },
-      { model: ChecklistItem, as: 'checklistItems', attributes: ['id', 'isCompleted'] }
+      { model: ChecklistItem, as: 'checklistItems', attributes: ['id', 'isCompleted'] },
+      { model: Workspace, as: 'workspace', attributes: ['id', 'name'] }
     ],
     order: [['createdAt', 'ASC']]
   });
@@ -404,6 +422,7 @@ exports.getReportData = async (userId, filters = {}, userName = '') => {
         priority:       t.priority,
         creator:        t.user?.name     || null,
         assignee:       t.assignee?.name || null,
+        board:          t.workspace?.name || null,
         checklistTotal: t.checklistItems?.length || 0,
         checklistDone:  t.checklistItems?.filter(i => i.isCompleted).length || 0,
         dueDate:        t.dueDate        || null,

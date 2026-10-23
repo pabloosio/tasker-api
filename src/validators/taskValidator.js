@@ -2,6 +2,16 @@ const Joi = require('joi');
 const validate = require('../middlewares/validator');
 const { TASK_STATUS, TASK_PRIORITY } = require('../config/constants');
 
+// Colaboradores: personas del tablero que trabajan en la tarea además de la asignada
+const collaboratorIdsSchema = Joi.array()
+  .items(Joi.string().uuid())
+  .max(20)
+  .unique()
+  .messages({
+    'array.max': 'Una tarea puede tener hasta 20 colaboradores',
+    'string.guid': 'Colaborador inválido'
+  });
+
 // Schema para crear tarea
 const taskSchema = Joi.object({
   title: Joi.string()
@@ -9,9 +19,9 @@ const taskSchema = Joi.object({
     .max(255)
     .required()
     .messages({
-      'string. empty': 'El título es requerido',
-      'string. min': 'El título debe tener al menos 3 caracteres',
-      'string.max':  'El título no puede tener más de 255 caracteres'
+      'string.empty': 'El título es requerido',
+      'string.min': 'El título debe tener al menos 3 caracteres',
+      'string.max': 'El título no puede tener más de 255 caracteres'
     }),
   
   description: Joi.string()
@@ -22,15 +32,15 @@ const taskSchema = Joi.object({
     }),
   
   status: Joi.string()
-    .valid(...Object. values(TASK_STATUS))
+    .valid(...Object.values(TASK_STATUS))
     .messages({
-      'any.only': `El estado debe ser:  ${Object.values(TASK_STATUS).join(', ')}`
+      'any.only': `El estado debe ser: ${Object.values(TASK_STATUS).join(', ')}`
     }),
   
   priority: Joi.string()
     .valid(...Object.values(TASK_PRIORITY))
     .messages({
-      'any. only': `La prioridad debe ser: ${Object.values(TASK_PRIORITY).join(', ')}`
+      'any.only': `La prioridad debe ser: ${Object.values(TASK_PRIORITY).join(', ')}`
     }),
   
   dueDate: Joi.string()
@@ -62,7 +72,9 @@ const taskSchema = Joi.object({
 
   assignedTo: Joi.string()
     .uuid()
-    .allow(null)
+    .allow(null),
+
+  collaboratorIds: collaboratorIdsSchema
 });
 
 // Schema para actualizar tarea
@@ -98,9 +110,11 @@ const taskUpdateSchema = Joi.object({
 
   assignedTo: Joi.string()
     .uuid()
-    .allow(null)
+    .allow(null),
+
+  collaboratorIds: collaboratorIdsSchema
 }).min(1).messages({
-  'object.min':  'Debe proporcionar al menos un campo para actualizar'
+  'object.min': 'Debe proporcionar al menos un campo para actualizar'
 });
 
 // Schema para mover una tarjeta (cambio de columna y/o de orden)

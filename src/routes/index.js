@@ -9,6 +9,8 @@ const exportRoutes = require('./exportRoutes');
 const workspaceRoutes = require('./workspaceRoutes');
 const adminRoutes = require('./adminRoutes');
 const searchRoutes = require('./searchRoutes');
+const notificationRoutes = require('./notificationRoutes');
+const attachmentController = require('../controllers/attachmentController');
 
 // Info de la API
 router.get('/', (req, res) => {
@@ -30,6 +32,9 @@ router.get('/', (req, res) => {
 // Rutas públicas
 router.use('/auth', authRoutes);
 
+// Funcionalidades habilitadas en este servidor (sin secretos)
+router.get('/config', attachmentController.getConfig);
+
 // Rutas protegidas
 router.use('/users', userRoutes);
 router.use('/tasks', taskRoutes);
@@ -38,5 +43,6 @@ router.use('/export', exportRoutes);
 router.use('/workspaces', workspaceRoutes);
 router.use('/admin', adminRoutes);
 router.use('/search', searchRoutes);
+router.use('/notifications', notificationRoutes);
 
 module.exports = router;

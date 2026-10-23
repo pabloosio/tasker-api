@@ -25,7 +25,11 @@ const db = {
   EmailVerificationToken: require('./EmailVerificationToken')(sequelize, Sequelize.DataTypes),
   ChecklistItem: require('./ChecklistItem')(sequelize, Sequelize.DataTypes),
   RefreshToken: require('./RefreshToken')(sequelize, Sequelize.DataTypes),
-  ActivityLog: require('./ActivityLog')(sequelize, Sequelize.DataTypes)
+  ActivityLog: require('./ActivityLog')(sequelize, Sequelize.DataTypes),
+  Attachment: require('./Attachment')(sequelize, Sequelize.DataTypes),
+  TaskComment: require('./TaskComment')(sequelize, Sequelize.DataTypes),
+  TaskCollaborator: require('./TaskCollaborator')(sequelize, Sequelize.DataTypes),
+  Notification: require('./Notification')(sequelize, Sequelize.DataTypes)
 };
 
 // Configurar asociaciones

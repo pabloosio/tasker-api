@@ -9,9 +9,11 @@ const logger = require('../utils/logger');
 // Grupos para filtrar la actividad desde la UI
 const ACTION_GROUPS = {
   status: [A.TASK_STATUS_CHANGED],
-  assignment: [A.TASK_ASSIGNED],
+  assignment: [A.TASK_ASSIGNED, A.COLLABORATOR_ADDED, A.COLLABORATOR_REMOVED],
   edit: [A.TASK_CREATED, A.TASK_UPDATED],
   checklist: [A.CHECKLIST_ITEM_ADDED, A.CHECKLIST_ITEM_COMPLETED, A.CHECKLIST_ITEM_REOPENED, A.CHECKLIST_ITEM_DELETED],
+  attachments: [A.ATTACHMENT_ADDED, A.ATTACHMENT_DELETED],
+  comments: [A.COMMENT_ADDED, A.COMMENT_DELETED],
   deleted: [A.TASK_DELETED],
   board: [
     A.CATEGORY_CREATED, A.CATEGORY_UPDATED, A.CATEGORY_DELETED,

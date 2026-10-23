@@ -1,4 +1,4 @@
-const { Task, Category, User, WorkspaceMember, ChecklistItem, Workspace } = require('../models');
+const { Task, Category, User, WorkspaceMember, ChecklistItem, Workspace, TaskCollaborator } = require('../models');
 const { NotFoundError, ForbiddenError, BadRequestError } = require('../utils/errors');
 const { PAGINATION, TASK_STATUS, TASK_PRIORITY, WORKSPACE_ROLES } = require('../config/constants');
 const { Op } = require('sequelize');
@@ -6,7 +6,9 @@ const { sendTaskAssignmentEmail } = require('./emailService');
 const { verifyTaskAccess, verifyTaskEditAccess } = require('./taskPermissions');
 const { formatTaskKey } = require('../utils/taskKey');
 const activityService = require('./activityService');
-const { ACTIVITY_ACTIONS } = require('../config/constants');
+const attachmentService = require('./attachmentService');
+const notificationService = require('./notificationService');
+const { ACTIVITY_ACTIONS, NOTIFICATION_TYPES } = require('../config/constants');
 
 /**
  * Disparar email de asignación sin bloquear la respuesta.
@@ -14,6 +16,9 @@ const { ACTIVITY_ACTIONS } = require('../config/constants');
  */
 const notifyAssignment = async (assignerId, assigneeId, task) => {
   if (!assigneeId) return;
+
+  // Aviso en la campanita (no se avisa si se asignó a sí mismo)
+  notificationService.notify({ recipients: [assigneeId], actorId: assignerId, type: NOTIFICATION_TYPES.TASK_ASSIGNED, task });
 
   const [assigner, assignee, workspace] = await Promise.all([
     User.findByPk(assignerId, { attributes: ['name'] }),
@@ -55,7 +60,74 @@ const taskIncludes = [
     as: 'checklistItems',
     attributes: ['id', 'content', 'isCompleted', 'completedAt', 'position'],
     order: [['position', 'ASC'], ['createdAt', 'ASC']]
+  },
+  {
+    model: User,
+    as: 'collaborators',
+    attributes: ['id', 'name'],
+    through: { attributes: [] }
   }
+];
+
+/**
+ * Guardar los colaboradores de una tarea (lista completa). undefined = no se tocan.
+ * Deben ser miembros del tablero y no observadores; la persona asignada no se repite como colaboradora.
+ * Registra el historial y avisa a quienes se agregan.
+ */
+const setCollaborators = async (actorId, task, collaboratorIds) => {
+  if (collaboratorIds === undefined) return;
+
+  const ids = [...new Set(collaboratorIds)].filter((id) => id && id !== task.assignedTo);
+  if (ids.length && !task.workspaceId) {
+    throw new BadRequestError('Solo las tareas de un tablero pueden tener colaboradores');
+  }
+  if (ids.length) {
+    const members = await WorkspaceMember.findAll({
+      where: { workspaceId: task.workspaceId, userId: { [Op.in]: ids } },
+      attributes: ['userId', 'role']
+    });
+    if (members.length !== ids.length) {
+      throw new BadRequestError('Solo puedes agregar como colaboradores a miembros del tablero');
+    }
+    if (members.some((m) => m.role === WORKSPACE_ROLES.VIEWER)) {
+      throw new BadRequestError('Los observadores no pueden colaborar en tareas (solo pueden verlas)');
+    }
+  }
+
+  const current = (await TaskCollaborator.findAll({ where: { taskId: task.id }, attributes: ['userId'] })).map((c) => c.userId);
+  const added = ids.filter((id) => !current.includes(id));
+  const removed = current.filter((id) => !ids.includes(id));
+  if (!added.length && !removed.length) return;
+
+  if (added.length) {
+    await TaskCollaborator.bulkCreate(added.map((userId) => ({ taskId: task.id, userId, addedBy: actorId })));
+  }
+  if (removed.length) {
+    await TaskCollaborator.destroy({ where: { taskId: task.id, userId: { [Op.in]: removed } } });
+  }
+
+  const users = await User.findAll({ where: { id: { [Op.in]: [...added, ...removed] } }, attributes: ['id', 'name'] });
+  const names = (list) => list.map((id) => users.find((u) => u.id === id)?.name).filter(Boolean);
+  if (added.length) {
+    await activityService.log({ actorId, action: ACTIVITY_ACTIONS.COLLABORATOR_ADDED, task, details: { names: names(added) } });
+    await notificationService.notify({ recipients: added, actorId, type: NOTIFICATION_TYPES.COLLABORATOR_ADDED, task });
+  }
+  if (removed.length) {
+    await activityService.log({ actorId, action: ACTIVITY_ACTIONS.COLLABORATOR_REMOVED, task, details: { names: names(removed) } });
+  }
+};
+
+// Resumen de adjuntos (contador + portada) solo si S3 está configurado.
+// separate: consulta aparte para no multiplicar filas con el JOIN del checklist.
+if (attachmentService.summaryInclude) {
+  taskIncludes.push({ ...attachmentService.summaryInclude, attributes: [...attachmentService.summaryInclude.attributes, 'taskId'], separate: true });
+}
+
+// Cantidad de comentarios de cada tarea (para el ícono 💬 en tarjetas y en Mis tareas).
+// Subconsulta: no multiplica filas como lo haría un JOIN con el checklist.
+const commentCountAttribute = [
+  Task.sequelize.literal('(SELECT COUNT(*) FROM task_comments AS tc WHERE tc.task_id = `Task`.`id`)'),
+  'commentCount'
 ];
 
 // Las completadas con más de N días salen del tablero (siguen en reportes y exportación)
@@ -103,6 +175,7 @@ exports.getBoardTasks = async (userId, { workspaceId } = {}) => {
           { completedAt: null }
         ]
       },
+      attributes: { include: [commentCountAttribute] },
       include: taskIncludes,
       order: [['position', 'ASC'], ['createdAt', 'DESC']]
     }),
@@ -113,7 +186,7 @@ exports.getBoardTasks = async (userId, { workspaceId } = {}) => {
   ]);
 
   return {
-    tasks,
+    tasks: await attachmentService.withSummary(tasks),
     archivedCount,
     archiveDays: BOARD_ARCHIVE_DAYS,
     wipLimits: workspace?.wipLimits || {}
@@ -125,17 +198,22 @@ exports.getBoardTasks = async (userId, { workspaceId } = {}) => {
  * personales sin asignar. Incluye las completadas recientes.
  */
 exports.getMyTasks = async (userId) => {
-  const memberships = await WorkspaceMember.findAll({ where: { userId }, attributes: ['workspaceId'] });
+  const [memberships, collaborations] = await Promise.all([
+    WorkspaceMember.findAll({ where: { userId }, attributes: ['workspaceId'] }),
+    TaskCollaborator.findAll({ where: { userId }, attributes: ['taskId'] })
+  ]);
   const workspaceIds = memberships.map(m => m.workspaceId);
+  const collaborationTaskIds = collaborations.map(c => c.taskId);
 
-  return await Task.findAll({
+  const tasks = await Task.findAll({
     where: {
       workspaceId: { [Op.in]: workspaceIds },
       [Op.and]: [
         {
           [Op.or]: [
             { assignedTo: userId },
-            { assignedTo: null, userId, '$workspace.is_personal$': true }
+            { assignedTo: null, userId, '$workspace.is_personal$': true },
+            ...(collaborationTaskIds.length ? [{ id: { [Op.in]: collaborationTaskIds } }] : [])
           ]
         },
         {
@@ -146,12 +224,14 @@ exports.getMyTasks = async (userId) => {
         }
       ]
     },
+    attributes: { include: [commentCountAttribute] },
     include: [
       ...taskIncludes,
       { model: Workspace, as: 'workspace', attributes: ['id', 'name', 'isPersonal'] }
     ],
     order: [['dueDate', 'ASC'], ['position', 'ASC']]
   });
+  return await attachmentService.withSummary(tasks);
 };
 
 /**
@@ -223,7 +303,7 @@ exports.getAllTasks = async (userId, filters = {}) => {
   });
 
   return {
-    tasks: rows,
+    tasks: await attachmentService.withSummary(rows),
     pagination: {
       total: count,
       page: parseInt(page),
@@ -291,7 +371,7 @@ exports.getTaskById = async (userId, taskId) => {
 
   await verifyTaskAccess(userId, task);
 
-  return task;
+  return await attachmentService.withSummary(task);
 };
 
 /**
@@ -309,7 +389,7 @@ exports.getTaskByNumber = async (userId, number) => {
 
   await verifyTaskAccess(userId, task);
 
-  return task;
+  return await attachmentService.withSummary(task);
 };
 
 /**
@@ -345,11 +425,13 @@ exports.createTask = async (userId, taskData) => {
     status: taskData.status || TASK_STATUS.PENDING
   });
 
+  const { collaboratorIds, ...fields } = taskData;
   const task = await Task.create({
-    ...taskData,
+    ...fields,
     position,
     userId
   });
+  await setCollaborators(userId, task, collaboratorIds);
 
   const result = await Task.findByPk(task.id, { include: taskIncludes });
 
@@ -363,7 +445,7 @@ exports.createTask = async (userId, taskData) => {
     details: { status: result.status, assignee: result.assignee?.name ?? null }
   });
 
-  return result;
+  return await attachmentService.withSummary(result);
 };
 
 /**
@@ -420,7 +502,13 @@ exports.updateTask = async (userId, taskId, taskData) => {
 
   const previousAssignee = task.assignedTo;
   const before = task.toJSON();
-  await task.update(taskData);
+  const { collaboratorIds, ...fields } = taskData;
+  await task.update(fields);
+  await setCollaborators(userId, task, collaboratorIds);
+  // Si la nueva persona asignada era colaboradora, deja de serlo (no se repite)
+  if (collaboratorIds === undefined && task.assignedTo && task.assignedTo !== previousAssignee) {
+    await TaskCollaborator.destroy({ where: { taskId: task.id, userId: task.assignedTo } });
+  }
 
   const result = await Task.findByPk(task.id, { include: taskIncludes });
 
@@ -442,7 +530,7 @@ exports.updateTask = async (userId, taskId, taskData) => {
     notifyAssignment(userId, newAssignee, result);
   }
 
-  return result;
+  return await attachmentService.withSummary(result);
 };
 
 /**
@@ -561,7 +649,11 @@ exports.deleteTask = async (userId, taskId) => {
 
   await verifyTaskEditAccess(userId, task, { allowAssignee: false });
 
+  // Las keys se toman antes: el CASCADE borra los registros de adjuntos
+  const fileKeys = await attachmentService.collectKeys({ id: task.id });
   await task.destroy();
+  attachmentService.purgeKeys(fileKeys);
+  await notificationService.removeForTask(task.id);
 
   // El registro conserva número y título aunque la tarea ya no exista
   await activityService.log({
