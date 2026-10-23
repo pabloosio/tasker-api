@@ -24,7 +24,8 @@ const db = {
   PasswordResetToken: require('./PasswordResetToken')(sequelize, Sequelize.DataTypes),
   EmailVerificationToken: require('./EmailVerificationToken')(sequelize, Sequelize.DataTypes),
   ChecklistItem: require('./ChecklistItem')(sequelize, Sequelize.DataTypes),
-  RefreshToken: require('./RefreshToken')(sequelize, Sequelize.DataTypes)
+  RefreshToken: require('./RefreshToken')(sequelize, Sequelize.DataTypes),
+  ActivityLog: require('./ActivityLog')(sequelize, Sequelize.DataTypes)
 };
 
 // Configurar asociaciones

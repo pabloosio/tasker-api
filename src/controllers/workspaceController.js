@@ -29,6 +29,13 @@ exports.updateWorkspace = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
+exports.updateWipLimits = async (req, res, next) => {
+  try {
+    const wipLimits = await workspaceService.updateWipLimits(req.user.id, req.params.id, req.body.wipLimits);
+    return successResponse(res, { wipLimits }, 'Límites actualizados exitosamente');
+  } catch (error) { next(error); }
+};
+
 exports.deleteWorkspace = async (req, res, next) => {
   try {
     await workspaceService.deleteWorkspace(req.user.id, req.params.id);

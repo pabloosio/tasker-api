@@ -8,6 +8,7 @@ const categoryRoutes = require('./categoryRoutes');
 const exportRoutes = require('./exportRoutes');
 const workspaceRoutes = require('./workspaceRoutes');
 const adminRoutes = require('./adminRoutes');
+const searchRoutes = require('./searchRoutes');
 
 // Info de la API
 router.get('/', (req, res) => {
@@ -36,5 +37,6 @@ router.use('/categories', categoryRoutes);
 router.use('/export', exportRoutes);
 router.use('/workspaces', workspaceRoutes);
 router.use('/admin', adminRoutes);
+router.use('/search', searchRoutes);
 
 module.exports = router;

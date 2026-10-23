@@ -1,0 +1,21 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: tasker-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: tasker
+      MYSQL_DATABASE: tasker_dev
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    ports:
+      - "3306:3306"
+    volumes:
+      - tasker-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-ptasker"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  tasker-mysql-data:

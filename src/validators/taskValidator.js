@@ -96,10 +96,6 @@ const taskUpdateSchema = Joi.object({
     .uuid()
     .allow(null),
 
-  workspaceId: Joi.string()
-    .uuid()
-    .allow(null),
-
   assignedTo: Joi.string()
     .uuid()
     .allow(null)
@@ -107,7 +103,17 @@ const taskUpdateSchema = Joi.object({
   'object.min':  'Debe proporcionar al menos un campo para actualizar'
 });
 
+// Schema para mover una tarjeta (cambio de columna y/o de orden)
+const taskMoveSchema = Joi.object({
+  status: Joi.string()
+    .valid(...Object.values(TASK_STATUS))
+    .required(),
+
+  position: Joi.number()
+});
+
 module.exports = {
   validateTask: validate(taskSchema),
-  validateTaskUpdate: validate(taskUpdateSchema)
+  validateTaskUpdate: validate(taskUpdateSchema),
+  validateTaskMove: validate(taskMoveSchema)
 };

@@ -1,6 +1,7 @@
 const { Workspace, WorkspaceMember, User } = require('../models');
 const { NotFoundError, ForbiddenError, BadRequestError } = require('../utils/errors');
-const { WORKSPACE_ROLES } = require('../config/constants');
+const { WORKSPACE_ROLES, ACTIVITY_ACTIONS } = require('../config/constants');
+const activityService = require('./activityService');
 const { sendWorkspaceInviteEmail } = require('./emailService');
 
 /**
@@ -106,6 +107,8 @@ exports.createWorkspace = async (userId, workspaceData) => {
     role: WORKSPACE_ROLES.OWNER
   });
 
+  await activityService.log({ actorId: userId, action: ACTIVITY_ACTIONS.WORKSPACE_CREATED, workspace });
+
   return await exports.getWorkspaceById(userId, workspace.id);
 };
 
@@ -124,7 +127,16 @@ exports.updateWorkspace = async (userId, workspaceId, workspaceData) => {
     throw new BadRequestError('No se puede modificar el workspace personal');
   }
 
+  const before = { name: workspace.name, description: workspace.description || null };
   await workspace.update(workspaceData);
+
+  const changes = ['name', 'description']
+    .map(field => ({ field, from: before[field], to: workspace[field] || null }))
+    .filter(c => c.from !== c.to);
+  if (changes.length) {
+    await activityService.log({ actorId: userId, action: ACTIVITY_ACTIONS.WORKSPACE_UPDATED, workspace, changes });
+  }
+
   return await exports.getWorkspaceById(userId, workspaceId);
 };
 
@@ -148,6 +160,9 @@ exports.deleteWorkspace = async (userId, workspaceId) => {
   }
 
   await workspace.destroy();
+
+  // Queda en la auditoría global aunque el tablero ya no exista
+  await activityService.log({ actorId: userId, action: ACTIVITY_ACTIONS.WORKSPACE_DELETED, workspace });
 };
 
 /**
@@ -207,6 +222,13 @@ exports.inviteMember = async (inviterId, workspaceId, { userId: inviteeUserId, e
     role
   });
 
+  await activityService.log({
+    actorId: inviterId,
+    action: ACTIVITY_ACTIONS.MEMBER_ADDED,
+    workspace,
+    details: { member: userToInvite.name, role }
+  });
+
   // Obtener datos del invitador para el email
   const inviter = await User.findByPk(inviterId, { attributes: ['name'] });
 
@@ -243,7 +265,15 @@ exports.removeMember = async (userId, workspaceId, memberId) => {
     throw new BadRequestError('No se puede remover al propietario del workspace');
   }
 
+  const removedUser = await User.findByPk(member.userId, { attributes: ['name'] });
   await member.destroy();
+
+  await activityService.log({
+    actorId: userId,
+    action: ACTIVITY_ACTIONS.MEMBER_REMOVED,
+    workspace: { id: workspaceId },
+    details: { member: removedUser?.name ?? null, role: member.role }
+  });
 };
 
 /**
@@ -268,7 +298,19 @@ exports.updateMemberRole = async (userId, workspaceId, memberId, newRole) => {
     throw new BadRequestError('No se puede cambiar el rol del propietario');
   }
 
+  const previousRole = member.role;
   await member.update({ role: newRole });
+
+  if (previousRole !== newRole) {
+    const memberUser = await User.findByPk(member.userId, { attributes: ['name'] });
+    await activityService.log({
+      actorId: userId,
+      action: ACTIVITY_ACTIONS.MEMBER_ROLE_CHANGED,
+      workspace: { id: workspaceId },
+      changes: [{ field: 'role', from: previousRole, to: newRole }],
+      details: { member: memberUser?.name ?? null }
+    });
+  }
 
   return await WorkspaceMember.findByPk(member.id, {
     include: [
@@ -284,3 +326,31 @@ exports.updateMemberRole = async (userId, workspaceId, memberId, newRole) => {
 // Exportar helpers para uso en otros servicios
 exports.verifyMembership = verifyMembership;
 exports.verifyAdminAccess = verifyAdminAccess;
+
+/**
+ * Actualizar límites WIP de las columnas (solo OWNER/ADMIN)
+ */
+exports.updateWipLimits = async (userId, workspaceId, wipLimits) => {
+  await verifyAdminAccess(userId, workspaceId);
+
+  const workspace = await Workspace.findByPk(workspaceId);
+  if (!workspace) throw new NotFoundError('Workspace no encontrado');
+
+  // Fusionar con los existentes; null elimina el límite de esa columna
+  const merged = { ...(workspace.wipLimits || {}) };
+  Object.entries(wipLimits).forEach(([status, limit]) => {
+    if (limit === null) delete merged[status];
+    else merged[status] = limit;
+  });
+
+  const previous = workspace.wipLimits || {};
+  await workspace.update({ wipLimits: merged });
+
+  await activityService.log({
+    actorId: userId,
+    action: ACTIVITY_ACTIONS.WIP_LIMITS_CHANGED,
+    workspace,
+    changes: [{ field: 'wipLimits', from: previous, to: merged }]
+  });
+  return merged;
+};

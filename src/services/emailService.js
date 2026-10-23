@@ -246,13 +246,14 @@ const sendWorkspaceInviteEmail = async ({ inviteeEmail, inviteeName, inviterName
  * @param {string} opts.assigneeName     - Nombre del usuario asignado
  * @param {string} opts.assignerName     - Nombre de quien asigna
  * @param {string} opts.taskTitle        - Título de la tarea
+ * @param {string} opts.taskKey          - ID legible de la tarea (#000142)
  * @param {string} opts.taskDescription  - Descripción (puede ser null)
  * @param {string} opts.priority         - LOW | MEDIUM | HIGH
  * @param {string} opts.dueDate          - YYYY-MM-DD o null
  * @param {string} opts.workspaceName    - Nombre del workspace (puede ser null)
  * @param {string} opts.appUrl           - URL de la app
  */
-const sendTaskAssignmentEmail = async ({ assigneeEmail, assigneeName, assignerName, taskTitle, taskDescription, priority, dueDate, workspaceName }) => {
+const sendTaskAssignmentEmail = async ({ assigneeEmail, assigneeName, assignerName, taskTitle, taskKey, taskDescription, priority, dueDate, workspaceName }) => {
   const appUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
 
   const PRIORITY_LABEL = { LOW: 'Baja', MEDIUM: 'Media', HIGH: 'Alta' };
@@ -271,7 +272,7 @@ const sendTaskAssignmentEmail = async ({ assigneeEmail, assigneeName, assignerNa
     Destination: { ToAddresses: [assigneeEmail] },
     Message: {
       Subject: {
-        Data: `${assignerName} te asignó: "${taskTitle.length > 60 ? taskTitle.slice(0, 57) + '...' : taskTitle}"`,
+        Data: `${taskKey ? `[${taskKey}] ` : ''}${assignerName} te asignó: "${taskTitle.length > 60 ? taskTitle.slice(0, 57) + '...' : taskTitle}"`,
         Charset: 'UTF-8'
       },
       Body: {
@@ -311,7 +312,7 @@ const sendTaskAssignmentEmail = async ({ assigneeEmail, assigneeName, assignerNa
             <tr>
               <td>
                 <p style="color:rgba(255,255,255,0.7);font-size:11px;font-weight:700;text-transform:uppercase;
-                          letter-spacing:0.8px;margin:0 0 4px;">Tarea asignada</p>
+                          letter-spacing:0.8px;margin:0 0 4px;">Tarea asignada${taskKey ? ` · ${taskKey}` : ''}</p>
                 <h3 style="color:#fff;margin:0;font-size:17px;font-weight:700;line-height:1.4;">${taskTitle}</h3>
               </td>
               <td align="right" style="vertical-align:top;padding-left:12px;white-space:nowrap;">
@@ -364,7 +365,7 @@ const sendTaskAssignmentEmail = async ({ assigneeEmail, assigneeName, assignerNa
 
     <!-- CTA -->
     <div style="text-align:center;margin-bottom:28px;">
-      <a href="${appUrl}"
+      <a href="${taskKey ? `${appUrl}/t/${taskKey.replace('#', '')}` : appUrl}"
          style="display:inline-block;background:#6f63c6;color:#fff;padding:14px 36px;
                 text-decoration:none;border-radius:8px;font-size:15px;font-weight:700;">
         Ver tarea en Tasker

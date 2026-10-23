@@ -3,6 +3,7 @@ const router = express.Router();
 const auth = require('../middlewares/auth');
 const checkRole = require('../middlewares/checkRole');
 const adminController = require('../controllers/adminController');
+const activityController = require('../controllers/activityController');
 const {
   validateGetUsers,
   validateUpdateEmail,
@@ -28,5 +29,8 @@ router.post('/users/:userId/verify-email', adminController.verifyUserEmailManual
 
 // PATCH /api/v1/admin/users/:userId/role - Cambiar rol
 router.patch('/users/:userId/role', validateUpdateRole, adminController.updateUserRole);
+
+// GET /api/v1/admin/activity - Auditoría global de todos los tableros
+router.get('/activity', activityController.getGlobalActivity);
 
 module.exports = router;

@@ -52,3 +52,29 @@ exports.deactivateAccount = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * Resumen del perfil (tableros, roles y números)
+ * GET /api/v1/users/profile/summary
+ */
+exports.getProfileSummary = async (req, res, next) => {
+  try {
+    const summary = await userService.getProfileSummary(req.user.id);
+    return successResponse(res, summary, 'Perfil obtenido exitosamente');
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Cambiar contraseña
+ * PUT /api/v1/users/profile/password
+ */
+exports.changePassword = async (req, res, next) => {
+  try {
+    await userService.changePassword(req.user.id, req.body);
+    return successResponse(res, null, 'Contraseña actualizada exitosamente');
+  } catch (error) {
+    next(error);
+  }
+};

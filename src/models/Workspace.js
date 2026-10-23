@@ -32,6 +32,11 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.BOOLEAN,
       defaultValue: false,
       allowNull: false
+    },
+    // Límites WIP por columna, ej. { "IN_PROGRESS": 6, "IN_REVIEW": 4 }
+    wipLimits: {
+      type: DataTypes.JSON,
+      allowNull: true
     }
   }, {
     tableName: 'workspaces',

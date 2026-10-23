@@ -1,40 +1,12 @@
 const { Task, Category, User, WorkspaceMember, ChecklistItem, Workspace } = require('../models');
-const { NotFoundError, ForbiddenError } = require('../utils/errors');
+const { NotFoundError, ForbiddenError, BadRequestError } = require('../utils/errors');
 const { PAGINATION, TASK_STATUS, TASK_PRIORITY, WORKSPACE_ROLES } = require('../config/constants');
 const { Op } = require('sequelize');
 const { sendTaskAssignmentEmail } = require('./emailService');
-
-/**
- * Verificar acceso a una tarea (por ownership directo o membresía de workspace)
- */
-const verifyTaskAccess = async (userId, task) => {
-  if (task.userId === userId) return;
-
-  if (task.workspaceId) {
-    const membership = await WorkspaceMember.findOne({
-      where: { workspaceId: task.workspaceId, userId }
-    });
-    if (membership) return;
-  }
-
-  throw new ForbiddenError('No tienes permiso para acceder a esta tarea');
-};
-
-/**
- * Verificar que el usuario puede escribir en el workspace de una tarea
- */
-const verifyTaskWriteAccess = async (userId, task) => {
-  await verifyTaskAccess(userId, task);
-
-  if (task.workspaceId) {
-    const membership = await WorkspaceMember.findOne({
-      where: { workspaceId: task.workspaceId, userId }
-    });
-    if (membership?.role === WORKSPACE_ROLES.VIEWER) {
-      throw new ForbiddenError('Los observadores no pueden modificar tareas');
-    }
-  }
-};
+const { verifyTaskAccess, verifyTaskEditAccess } = require('./taskPermissions');
+const { formatTaskKey } = require('../utils/taskKey');
+const activityService = require('./activityService');
+const { ACTIVITY_ACTIONS } = require('../config/constants');
 
 /**
  * Disparar email de asignación sin bloquear la respuesta.
@@ -56,6 +28,7 @@ const notifyAssignment = async (assignerId, assigneeId, task) => {
     assigneeName: assignee.name,
     assignerName: assigner?.name ?? 'Un compañero',
     taskTitle: task.title,
+    taskKey: formatTaskKey(task.number),
     taskDescription: task.description,
     priority: task.priority,
     dueDate: task.dueDate,
@@ -84,6 +57,102 @@ const taskIncludes = [
     order: [['position', 'ASC'], ['createdAt', 'ASC']]
   }
 ];
+
+// Las completadas con más de N días salen del tablero (siguen en reportes y exportación)
+const BOARD_ARCHIVE_DAYS = 30;
+// "Mis tareas" muestra las completadas de los últimos N días
+const MY_TASKS_COMPLETED_DAYS = 7;
+
+const daysAgo = (days) => new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+/**
+ * Posición para colocar una tarjeta arriba de su columna
+ */
+const topPositionOf = async ({ workspaceId, userId, status }) => {
+  const where = workspaceId ? { workspaceId, status } : { userId, workspaceId: null, status };
+  const min = await Task.min('position', { where });
+  return (min ?? 1) - 1;
+};
+
+const verifyMembership = async (userId, workspaceId) => {
+  const membership = await WorkspaceMember.findOne({ where: { workspaceId, userId } });
+  if (!membership) {
+    throw new ForbiddenError('No tienes acceso a este workspace');
+  }
+  return membership;
+};
+
+/**
+ * Tareas del tablero (Kanban): todas las activas, sin tope de paginación, en su orden manual.
+ * Las completadas hace más de BOARD_ARCHIVE_DAYS días se archivan (solo se devuelve el conteo).
+ */
+exports.getBoardTasks = async (userId, { workspaceId } = {}) => {
+  if (!workspaceId) {
+    throw new BadRequestError('workspaceId es requerido');
+  }
+  await verifyMembership(userId, workspaceId);
+
+  const cutoff = daysAgo(BOARD_ARCHIVE_DAYS);
+  const [tasks, archivedCount, workspace] = await Promise.all([
+    Task.findAll({
+      where: {
+        workspaceId,
+        [Op.or]: [
+          { status: { [Op.ne]: TASK_STATUS.COMPLETED } },
+          { completedAt: { [Op.gte]: cutoff } },
+          { completedAt: null }
+        ]
+      },
+      include: taskIncludes,
+      order: [['position', 'ASC'], ['createdAt', 'DESC']]
+    }),
+    Task.count({
+      where: { workspaceId, status: TASK_STATUS.COMPLETED, completedAt: { [Op.lt]: cutoff } }
+    }),
+    Workspace.findByPk(workspaceId, { attributes: ['wipLimits'] })
+  ]);
+
+  return {
+    tasks,
+    archivedCount,
+    archiveDays: BOARD_ARCHIVE_DAYS,
+    wipLimits: workspace?.wipLimits || {}
+  };
+};
+
+/**
+ * "Mis tareas": lo asignado al usuario en todos sus tableros, más sus tareas
+ * personales sin asignar. Incluye las completadas recientes.
+ */
+exports.getMyTasks = async (userId) => {
+  const memberships = await WorkspaceMember.findAll({ where: { userId }, attributes: ['workspaceId'] });
+  const workspaceIds = memberships.map(m => m.workspaceId);
+
+  return await Task.findAll({
+    where: {
+      workspaceId: { [Op.in]: workspaceIds },
+      [Op.and]: [
+        {
+          [Op.or]: [
+            { assignedTo: userId },
+            { assignedTo: null, userId, '$workspace.is_personal$': true }
+          ]
+        },
+        {
+          [Op.or]: [
+            { status: { [Op.ne]: TASK_STATUS.COMPLETED } },
+            { completedAt: { [Op.gte]: daysAgo(MY_TASKS_COMPLETED_DAYS) } }
+          ]
+        }
+      ]
+    },
+    include: [
+      ...taskIncludes,
+      { model: Workspace, as: 'workspace', attributes: ['id', 'name', 'isPersonal'] }
+    ],
+    order: [['dueDate', 'ASC'], ['position', 'ASC']]
+  });
+};
 
 /**
  * Obtener todas las tareas del usuario
@@ -191,8 +260,10 @@ exports.getTaskStats = async (userId, filters = {}) => {
   const stats = {
     total: tasks.length,
     byStatus: {
+      backlog: tasks.filter(t => t.status === TASK_STATUS.BACKLOG).length,
       pending: tasks.filter(t => t.status === TASK_STATUS.PENDING).length,
       in_progress: tasks.filter(t => t.status === TASK_STATUS.IN_PROGRESS).length,
+      in_review: tasks.filter(t => t.status === TASK_STATUS.IN_REVIEW).length,
       completed: tasks.filter(t => t.status === TASK_STATUS.COMPLETED).length
     },
     byPriority: {
@@ -212,6 +283,24 @@ exports.getTaskById = async (userId, taskId) => {
   const task = await Task.findOne({
     where: { id: taskId },
     include: taskIncludes
+  });
+
+  if (!task) {
+    throw new NotFoundError('Tarea no encontrada');
+  }
+
+  await verifyTaskAccess(userId, task);
+
+  return task;
+};
+
+/**
+ * Obtener tarea por su número legible (#000142). Misma regla de acceso que por ID.
+ */
+exports.getTaskByNumber = async (userId, number) => {
+  const task = await Task.findOne({
+    where: { number },
+    include: [...taskIncludes, { model: Workspace, as: 'workspace', attributes: ['id', 'name', 'isPersonal'] }]
   });
 
   if (!task) {
@@ -250,8 +339,15 @@ exports.createTask = async (userId, taskData) => {
     }
   }
 
+  const position = await topPositionOf({
+    workspaceId: taskData.workspaceId,
+    userId,
+    status: taskData.status || TASK_STATUS.PENDING
+  });
+
   const task = await Task.create({
     ...taskData,
+    position,
     userId
   });
 
@@ -260,6 +356,13 @@ exports.createTask = async (userId, taskData) => {
   // Notificar al asignado si es alguien distinto al creador
   notifyAssignment(userId, taskData.assignedTo, result);
 
+  await activityService.log({
+    actorId: userId,
+    action: ACTIVITY_ACTIONS.TASK_CREATED,
+    task: result,
+    details: { status: result.status, assignee: result.assignee?.name ?? null }
+  });
+
   return result;
 };
 
@@ -267,13 +370,23 @@ exports.createTask = async (userId, taskData) => {
  * Actualizar tarea
  */
 exports.updateTask = async (userId, taskId, taskData) => {
-  const task = await Task.findOne({ where: { id: taskId } });
+  const task = await Task.findOne({
+    where: { id: taskId },
+    include: [
+      { model: Category, as: 'category', attributes: ['id', 'name'] },
+      { model: User, as: 'assignee', attributes: ['id', 'name'] }
+    ]
+  });
 
   if (!task) {
     throw new NotFoundError('Tarea no encontrada');
   }
 
-  await verifyTaskWriteAccess(userId, task);
+  await verifyTaskEditAccess(userId, task);
+
+  // Una tarea no se mueve de tablero ni cambia de número al editarla
+  delete taskData.workspaceId;
+  delete taskData.number;
 
   // Si cambió el status, actualizar statusUpdatedAt
   if (taskData.status && taskData.status !== task.status) {
@@ -288,6 +401,11 @@ exports.updateTask = async (userId, taskId, taskData) => {
     if (taskData.status !== TASK_STATUS.COMPLETED && task.completedAt) {
       taskData.completedAt = null;
     }
+
+    // Sin posición explícita (ej. cambio desde el formulario), va arriba de la nueva columna
+    if (taskData.position === undefined) {
+      taskData.position = await topPositionOf({ workspaceId: task.workspaceId, userId: task.userId, status: taskData.status });
+    }
   }
 
   // Si cambia assignedTo, verificar membresía en workspace
@@ -301,9 +419,22 @@ exports.updateTask = async (userId, taskId, taskData) => {
   }
 
   const previousAssignee = task.assignedTo;
+  const before = task.toJSON();
   await task.update(taskData);
 
   const result = await Task.findByPk(task.id, { include: taskIncludes });
+
+  // Historial: estado, asignación y demás cambios como eventos separados
+  const diff = activityService.diffTask(before, result);
+  if (diff.status) {
+    await activityService.log({ actorId: userId, action: ACTIVITY_ACTIONS.TASK_STATUS_CHANGED, task: result, changes: diff.status });
+  }
+  if (diff.assignment) {
+    await activityService.log({ actorId: userId, action: ACTIVITY_ACTIONS.TASK_ASSIGNED, task: result, changes: diff.assignment });
+  }
+  if (diff.other.length) {
+    await activityService.log({ actorId: userId, action: ACTIVITY_ACTIONS.TASK_UPDATED, task: result, changes: diff.other });
+  }
 
   // Notificar solo si el asignado cambió y es alguien distinto al editor
   const newAssignee = taskData.assignedTo;
@@ -317,8 +448,10 @@ exports.updateTask = async (userId, taskId, taskData) => {
 /**
  * Actualizar solo el estado de la tarea
  */
-exports.updateTaskStatus = async (userId, taskId, status) => {
-  return await exports.updateTask(userId, taskId, { status });
+exports.updateTaskStatus = async (userId, taskId, status, position) => {
+  const changes = { status };
+  if (position !== undefined) changes.position = position;
+  return await exports.updateTask(userId, taskId, changes);
 };
 
 /**
@@ -426,7 +559,15 @@ exports.deleteTask = async (userId, taskId) => {
     throw new NotFoundError('Tarea no encontrada');
   }
 
-  await verifyTaskWriteAccess(userId, task);
+  await verifyTaskEditAccess(userId, task, { allowAssignee: false });
 
   await task.destroy();
+
+  // El registro conserva número y título aunque la tarea ya no exista
+  await activityService.log({
+    actorId: userId,
+    action: ACTIVITY_ACTIONS.TASK_DELETED,
+    task,
+    details: { status: task.status, priority: task.priority }
+  });
 };

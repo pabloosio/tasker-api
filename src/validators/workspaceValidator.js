@@ -1,6 +1,6 @@
 const Joi = require('joi');
 const validate = require('../middlewares/validator');
-const { WORKSPACE_ROLES } = require('../config/constants');
+const { WORKSPACE_ROLES, TASK_STATUS } = require('../config/constants');
 
 const workspaceSchema = Joi.object({
   name: Joi.string().min(2).max(100).required()
@@ -30,8 +30,19 @@ const updateMemberRoleSchema = Joi.object({
     .messages({ 'any.only': `El rol debe ser: ${WORKSPACE_ROLES.ADMIN}, ${WORKSPACE_ROLES.MEMBER} o ${WORKSPACE_ROLES.VIEWER}` })
 });
 
+// Límite por columna; null o ausente = sin límite
+const wipLimitsSchema = Joi.object({
+  wipLimits: Joi.object()
+    .pattern(
+      Joi.string().valid(...Object.values(TASK_STATUS)),
+      Joi.number().integer().min(1).max(999).allow(null)
+    )
+    .required()
+});
+
 module.exports = {
   validateWorkspace: validate(workspaceSchema),
+  validateWipLimits: validate(wipLimitsSchema),
   validateInviteMember: validate(inviteMemberSchema),
   validateUpdateMemberRole: validate(updateMemberRoleSchema)
 };

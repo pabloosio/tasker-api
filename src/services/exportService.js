@@ -3,7 +3,9 @@ const PDFDocument = require('pdfkit');
 const { Op } = require('sequelize');
 const { Task, Category, User, ChecklistItem } = require('../models');
 
-const STATUS_LABELS   = { PENDING: 'Pendiente', IN_PROGRESS: 'En Progreso', COMPLETED: 'Completada' };
+const { formatTaskKey } = require('../utils/taskKey');
+const STATUS_COLORS   = { BACKLOG: '#94A3B8', PENDING: '#F59E0B', IN_PROGRESS: '#0EA5E9', IN_REVIEW: '#8B5CF6', COMPLETED: '#22C55E' };
+const STATUS_LABELS   = { BACKLOG: 'Backlog', PENDING: 'Por hacer', IN_PROGRESS: 'En Progreso', IN_REVIEW: 'En Revisión', COMPLETED: 'Completada' };
 const PRIORITY_LABELS = { LOW: 'Baja', MEDIUM: 'Media', HIGH: 'Alta' };
 
 const fmtDate = (date) => {
@@ -92,7 +94,7 @@ exports.generateExcel = async (userId, filters = {}, userName = '') => {
   const ws = wb.addWorksheet('Reporte', { properties: { tabColor: { argb: 'FF6B9FD4' } } });
 
   ws.columns = [
-    { key: 'num',         width: 5  },
+    { key: 'num',         width: 10 },
     { key: 'title',       width: 30 },
     { key: 'description', width: 38 },
     { key: 'status',      width: 14 },
@@ -139,7 +141,7 @@ exports.generateExcel = async (userId, filters = {}, userName = '') => {
   r3.alignment = { horizontal: 'center', vertical: 'middle' };
 
   // ── Fila 4: Encabezados de columnas ───────────────────────────────────────
-  const hRow = ws.addRow(['#', 'Título', 'Descripción', 'Estado', 'Prioridad', 'Creador', 'Asignado a', 'Checklist', 'Vence', 'Completada', 'Creada']);
+  const hRow = ws.addRow(['ID', 'Título', 'Descripción', 'Estado', 'Prioridad', 'Creador', 'Asignado a', 'Checklist', 'Vence', 'Completada', 'Creada']);
   hRow.height    = 22;
   hRow.font      = { bold: true, color: { argb: 'FFFFFFFF' }, size: 9 };
   hRow.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2D3540' } };
@@ -159,14 +161,14 @@ exports.generateExcel = async (userId, filters = {}, userName = '') => {
     cRow.eachCell(cell => { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb } }; });
     cRow.getCell(11).alignment = { horizontal: 'right', vertical: 'middle' };
 
-    group.tasks.forEach((task, idx) => {
+    group.tasks.forEach((task) => {
       altIdx++;
       const total     = task.checklistItems?.length || 0;
       const done      = task.checklistItems?.filter(i => i.isCompleted).length || 0;
       const checklist = total > 0 ? `${done}/${total}` : '-';
 
       const dRow = ws.addRow([
-        idx + 1,
+        formatTaskKey(task.number),
         task.title,
         task.description || '-',
         STATUS_LABELS[task.status]     || task.status,
@@ -190,7 +192,7 @@ exports.generateExcel = async (userId, filters = {}, userName = '') => {
       });
 
       // Color estado
-      const sColor = task.status === 'COMPLETED' ? 'FF22C55E' : task.status === 'IN_PROGRESS' ? 'FF0EA5E9' : 'FFF59E0B';
+      const sColor = 'FF' + (STATUS_COLORS[task.status] || '#F59E0B').slice(1);
       dRow.getCell(4).font = { size: 9, color: { argb: sColor }, bold: task.status === 'COMPLETED' };
 
       // Color prioridad
@@ -286,7 +288,7 @@ exports.generatePdf = async (userId, filters = {}, userName = '') => {
       doc.moveDown(0.5);
 
       // ── Tareas ──────────────────────────────────────────────────────────
-      group.tasks.forEach((task, idx) => {
+      group.tasks.forEach((task) => {
         const total     = task.checklistItems?.length || 0;
         const done      = task.checklistItems?.filter(i => i.isCompleted).length || 0;
         const descLines = task.description ? Math.ceil(task.description.length / 88) : 0;
@@ -294,16 +296,15 @@ exports.generatePdf = async (userId, filters = {}, userName = '') => {
 
         const taskY = doc.y;
 
-        // Círculo numerador
-        doc.circle(L + 6, taskY + 5, 5.5).fill(group.color);
-        doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(7)
-           .text(String(idx + 1), L + 2, taskY + 2, { width: 9, align: 'center' });
+        // Marca de color del grupo
+        doc.circle(L + 6, taskY + 5, 3.5).fill(group.color);
 
-        // Título
-        const statusColor = task.status === 'COMPLETED' ? '#22C55E'
-          : task.status === 'IN_PROGRESS' ? '#0EA5E9' : '#F59E0B';
-        doc.fillColor('#2D3540').font('Helvetica-Bold').fontSize(10)
-           .text(task.title, L + 16, taskY, { width: W - 90 });
+        // ID + Título
+        const statusColor = STATUS_COLORS[task.status] || '#F59E0B';
+        doc.fillColor('#6B7685').font('Helvetica-Bold').fontSize(10)
+           .text(`${formatTaskKey(task.number)}  `, L + 16, taskY, { width: W - 90, continued: true })
+           .fillColor('#2D3540')
+           .text(task.title);
 
         // Badge estado (derecha)
         doc.fillColor(statusColor).font('Helvetica-Bold').fontSize(8)
@@ -386,13 +387,17 @@ exports.getReportData = async (userId, filters = {}, userName = '') => {
       total:      tasks.length,
       completed:  tasks.filter(t => t.status === 'COMPLETED').length,
       inProgress: tasks.filter(t => t.status === 'IN_PROGRESS').length,
-      pending:    tasks.filter(t => t.status === 'PENDING').length
+      pending:    tasks.filter(t => t.status === 'PENDING').length,
+      inReview:   tasks.filter(t => t.status === 'IN_REVIEW').length,
+      backlog:    tasks.filter(t => t.status === 'BACKLOG').length
     },
     groups: groups.map(g => ({
       name:  g.name,
       color: g.color,
       tasks: g.tasks.map(t => ({
         id:             t.id,
+        number:         t.number,
+        key:            formatTaskKey(t.number),
         title:          t.title,
         description:    t.description || null,
         status:         t.status,

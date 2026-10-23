@@ -7,6 +7,12 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: DataTypes.UUIDV4,
       primaryKey: true
     },
+    // Identificador legible y consecutivo (#000142). Lo asigna la base de datos.
+    number: {
+      type: DataTypes.INTEGER,
+      autoIncrement: true,
+      unique: 'tasks_number_unique'
+    },
     title: {
       type: DataTypes.STRING(255),
       allowNull: false,
@@ -23,11 +29,7 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true
     },
     status: {
-      type: DataTypes.ENUM(
-        TASK_STATUS.PENDING,
-        TASK_STATUS. IN_PROGRESS,
-        TASK_STATUS.COMPLETED
-      ),
+      type: DataTypes.ENUM(...Object.values(TASK_STATUS)),
       defaultValue: TASK_STATUS.PENDING,
       allowNull: false
     },
@@ -51,6 +53,12 @@ module.exports = (sequelize, DataTypes) => {
     statusUpdatedAt: {
       type: DataTypes.DATE,
       allowNull: true
+    },
+    // Orden dentro de la columna (fraccional: al soltar entre dos tarjetas se usa el punto medio)
+    position: {
+      type: DataTypes.DOUBLE,
+      allowNull: false,
+      defaultValue: 0
     },
     userId: {
       type: DataTypes.UUID,

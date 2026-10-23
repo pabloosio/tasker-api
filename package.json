@@ -10,7 +10,11 @@
     "migrate: undo": "npx sequelize-cli db:migrate:undo",
     "migrate: undo:all": "npx sequelize-cli db:migrate:undo:all",
     "seed": "npx sequelize-cli db:seed:all",
-    "seed:undo": "npx sequelize-cli db:seed:undo: all"
+    "seed:undo": "npx sequelize-cli db:seed:undo:all",
+    "db:up": "docker compose up -d --wait",
+    "db:down": "docker compose down",
+    "db:sync": "node src/database/sync.js",
+    "db:setup": "npm run db:up && npm run db:sync && npm run seed"
   },
   "author": "",
   "license": "ISC",

@@ -77,9 +77,32 @@ const resetPasswordSchema = Joi.object({
     })
 });
 
+// Schema para editar el perfil propio
+const profileUpdateSchema = Joi.object({
+  name: Joi.string().trim().min(2).max(100)
+    .messages({
+      'string.min': 'El nombre debe tener al menos 2 caracteres',
+      'string.max': 'El nombre no puede tener más de 100 caracteres'
+    }),
+  pinnedWorkspaceId: Joi.string().uuid().allow(null)
+}).min(1);
+
+// Schema para cambiar la contraseña
+const changePasswordSchema = Joi.object({
+  currentPassword: Joi.string().required()
+    .messages({ 'string.empty': 'La contraseña actual es requerida' }),
+  newPassword: Joi.string().min(8).max(255).required()
+    .messages({
+      'string.empty': 'La nueva contraseña es requerida',
+      'string.min': 'La nueva contraseña debe tener al menos 8 caracteres'
+    })
+});
+
 module.exports = {
   validateRegister: validate(registerSchema),
   validateLogin: validate(loginSchema),
   validateForgotPassword: validate(forgotPasswordSchema),
-  validateResetPassword: validate(resetPasswordSchema)
+  validateResetPassword: validate(resetPasswordSchema),
+  validateProfileUpdate: validate(profileUpdateSchema),
+  validateChangePassword: validate(changePasswordSchema)
 };

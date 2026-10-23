@@ -2,8 +2,9 @@ const express = require('express');
 const router = express.Router();
 const taskController = require('../controllers/taskController');
 const auth = require('../middlewares/auth');
-const { validateTask, validateTaskUpdate } = require('../validators/taskValidator');
+const { validateTask, validateTaskUpdate, validateTaskMove } = require('../validators/taskValidator');
 const checklistController = require('../controllers/checklistController');
+const activityController = require('../controllers/activityController');
 const { validateChecklistItem } = require('../validators/checklistValidator');
 
 // Todas las rutas requieren autenticación
@@ -13,6 +14,9 @@ router.use(auth);
 router.get('/', taskController.getAllTasks);
 
 // GET /api/v1/tasks/stats - Estadísticas de tareas
+router.get('/board', taskController.getBoardTasks);
+router.get('/mine', taskController.getMyTasks);
+router.get('/by-number/:number', taskController.getTaskByNumber);
 router.get('/stats', taskController.getTaskStats);
 
 // GET /api/v1/tasks/weekly-report - Reporte semanal de productividad
@@ -23,12 +27,13 @@ router.post('/', validateTask, taskController.createTask);
 
 // GET /api/v1/tasks/:id - Obtener una tarea específica
 router.get('/:id', taskController.getTaskById);
+router.get('/:id/activity', activityController.getTaskActivity);
 
 // PUT /api/v1/tasks/:id - Actualizar tarea
 router.put('/:id', validateTaskUpdate, taskController.updateTask);
 
 // PATCH /api/v1/tasks/:id/status - Actualizar solo el estado
-router.patch('/:id/status', taskController.updateTaskStatus);
+router.patch('/:id/status', validateTaskMove, taskController.updateTaskStatus);
 
 // DELETE /api/v1/tasks/:id - Eliminar tarea
 router.delete('/:id', taskController.deleteTask);
